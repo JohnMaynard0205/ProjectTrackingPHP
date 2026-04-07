@@ -24,6 +24,14 @@
                 <option value="{{ $project->id }}">{{ $project->name }}</option>
             @endforeach
         </select>
+
+        <select wire:model.live="perPage"
+                class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="15">15 per page</option>
+            <option value="20">20 per page</option>
+            <option value="50">50 per page</option>
+            <option value="100">100 per page</option>
+        </select>
     </div>
 
     {{-- Tasks table (read-only) --}}
@@ -33,6 +41,15 @@
                 <p class="text-sm">No tasks match your filters.</p>
             </div>
         @else
+            <p class="px-6 py-3 text-xs text-gray-500 border-b border-gray-100 bg-gray-50/80">
+                Showing
+                <span class="font-medium text-gray-700">{{ $tasks->firstItem() }}</span>
+                –
+                <span class="font-medium text-gray-700">{{ $tasks->lastItem() }}</span>
+                of
+                <span class="font-medium text-gray-700">{{ $tasks->total() }}</span>
+                tasks
+            </p>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm min-w-[800px]">
                     <thead class="bg-gray-50 border-b border-gray-200">
@@ -104,6 +121,10 @@
                         @endforeach
                     </tbody>
                 </table>
+            </div>
+
+            <div class="px-6 py-4 border-t border-gray-100 bg-gray-50">
+                {{ $tasks->links() }}
             </div>
         @endif
     </div>

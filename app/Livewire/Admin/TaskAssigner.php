@@ -7,22 +7,46 @@ use App\Models\Task;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 #[Layout('components.layouts.app')]
 #[Title('Task oversight')]
 class TaskAssigner extends Component
 {
+    use WithPagination;
+
+    /** @var int Tasks per page (oversight list) */
+    public int $perPage = 20;
+
     public string $filterStatus = '';
 
     public ?int $filterProject = null;
+
+    public function updatedFilterStatus(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFilterProject(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedPerPage(): void
+    {
+        $allowed = [15, 20, 50, 100];
+        $n       = (int) $this->perPage;
+        $this->perPage = in_array($n, $allowed, true) ? $n : 20;
+        $this->resetPage();
+    }
 
     public function render()
     {
         $tasks = Task::with(['project', 'team', 'assignee', 'creator'])
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
             ->when($this->filterProject, fn ($q) => $q->where('project_id', $this->filterProject))
-            ->latest()
-            ->get();
+            ->latest('updated_at')
+            ->paginate($this->perPage);
 
         $projects = Project::orderBy('name')->get();
 
