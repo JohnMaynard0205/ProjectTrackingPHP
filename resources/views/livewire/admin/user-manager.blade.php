@@ -197,7 +197,7 @@
                             </td>
 
                             <td class="px-6 py-4 text-gray-400 whitespace-nowrap text-xs">
-                                {{ $user->created_at->format('M d, Y') }}
+                                {{ $user->created_at?->format('M d, Y') ?? '—' }}
                             </td>
 
                             <td class="px-4 py-4 text-right whitespace-nowrap">
