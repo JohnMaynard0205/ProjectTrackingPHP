@@ -201,7 +201,7 @@
                 </div>
             </div>
 
-            {{-- Upcoming events sidebar --}}
+            {{-- Upcoming items sidebar (events + task due dates) --}}
             <div class="space-y-4">
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div class="px-5 py-4 border-b border-gray-100">
@@ -209,7 +209,7 @@
                         <p class="text-xs text-gray-400 mt-0.5">Events and task due dates</p>
                     </div>
 
-                    @if($upcomingEvents->isEmpty())
+                    @if($upcomingItems->isEmpty())
                         <div class="px-5 py-10 text-center text-gray-400">
                             <svg class="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -219,7 +219,7 @@
                         </div>
                     @else
                         <ul class="divide-y divide-gray-50">
-                            @foreach($upcomingEvents as $row)
+                            @foreach($upcomingItems as $row)
                                 @php
                                     $isTask = ($row['kind'] ?? '') === 'task';
                                     $typeKey = $isTask ? 'task_due' : ($row['type'] ?? 'update');

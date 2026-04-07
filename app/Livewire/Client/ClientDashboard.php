@@ -180,8 +180,8 @@ class ClientDashboard extends Component
             ? Project::with(['tasks', 'events', 'teams'])->find($this->selectedProjectId)
             : null;
 
-        $itemsByDay     = collect();
-        $upcomingEvents = collect();
+        $itemsByDay      = collect();
+        $upcomingItems   = collect();
 
         if ($selectedProject) {
             $monthStart = Carbon::create($this->year, $this->month, 1)->startOfDay();
@@ -191,7 +191,7 @@ class ClientDashboard extends Component
 
             // Upcoming: merge events + task due dates, next 5 by date
             $today = now()->startOfDay();
-            $upcomingEvents = $selectedProject->events()
+            $upcomingItems = $selectedProject->events()
                 ->where('event_date', '>=', $today)
                 ->orderBy('event_date')
                 ->get()
@@ -218,7 +218,7 @@ class ClientDashboard extends Component
                     'status' => $t->status,
                 ]);
 
-            $upcomingEvents = $upcomingEvents->concat($upcomingTasks)
+            $upcomingItems = $upcomingItems->concat($upcomingTasks)
                 ->sortBy('date')
                 ->take(5)
                 ->values();
@@ -242,7 +242,7 @@ class ClientDashboard extends Component
             'projects'        => $projects,
             'selectedProject' => $selectedProject,
             'calendarGrid'    => $calendarGrid,
-            'upcomingEvents'  => $upcomingEvents,
+            'upcomingItems'   => $upcomingItems,
             'stats'           => $stats,
             'monthLabel'      => Carbon::create($this->year, $this->month, 1)->format('F Y'),
         ]);
