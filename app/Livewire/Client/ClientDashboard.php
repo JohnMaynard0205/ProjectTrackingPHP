@@ -3,7 +3,6 @@
 namespace App\Livewire\Client;
 
 use App\Models\Project;
-use App\Models\ProjectEvent;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
@@ -32,6 +31,10 @@ class ClientDashboard extends Component
 
     public function selectProject(int $id): void
     {
+        if (! $this->clientProjects()->whereKey($id)->exists()) {
+            return;
+        }
+
         $this->selectedProjectId = $id;
     }
 
@@ -61,6 +64,35 @@ class ClientDashboard extends Component
     private function clientProjects(): \Illuminate\Database\Eloquent\Builder
     {
         return Project::where('client_id', auth()->id())->orderBy('name');
+    }
+
+    /**
+     * Load the selected project only if it belongs to this client.
+     * Resets selectedProjectId when it is missing, deleted, or not owned (e.g. tampered request).
+     */
+    private function resolveSelectedProject(): ?Project
+    {
+        if ($this->selectedProjectId === null) {
+            return null;
+        }
+
+        $project = $this->clientProjects()
+            ->with(['tasks', 'events', 'teams'])
+            ->find($this->selectedProjectId);
+
+        if ($project) {
+            return $project;
+        }
+
+        $this->selectedProjectId = $this->clientProjects()->value('id');
+
+        if ($this->selectedProjectId === null) {
+            return null;
+        }
+
+        return $this->clientProjects()
+            ->with(['tasks', 'events', 'teams'])
+            ->find($this->selectedProjectId);
     }
 
     /**
@@ -176,9 +208,7 @@ class ClientDashboard extends Component
     {
         $projects = $this->clientProjects()->withCount('tasks')->get();
 
-        $selectedProject = $this->selectedProjectId
-            ? Project::with(['tasks', 'events', 'teams'])->find($this->selectedProjectId)
-            : null;
+        $selectedProject = $this->resolveSelectedProject();
 
         $itemsByDay      = collect();
         $upcomingItems   = collect();
