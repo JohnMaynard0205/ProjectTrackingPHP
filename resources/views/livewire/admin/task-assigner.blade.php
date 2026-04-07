@@ -8,30 +8,48 @@
     </div>
 
     {{-- Filters --}}
-    <div class="flex flex-wrap items-center gap-3 mb-6">
-        <select wire:model.live="filterStatus"
-                class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In progress</option>
-            <option value="done">Done</option>
-        </select>
+    <div class="flex flex-wrap items-end gap-4 mb-6" role="group" aria-label="Filter tasks">
+        <div class="flex flex-col gap-1 min-w-[10rem]">
+            <label for="task-oversight-filter-status" class="text-xs font-medium text-gray-700">
+                Status
+            </label>
+            <select id="task-oversight-filter-status"
+                    wire:model.live="filterStatus"
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In progress</option>
+                <option value="done">Done</option>
+            </select>
+        </div>
 
-        <select wire:model.live="filterProject"
-                class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option value="">All projects</option>
-            @foreach($projects as $project)
-                <option value="{{ $project->id }}">{{ $project->name }}</option>
-            @endforeach
-        </select>
+        <div class="flex flex-col gap-1 min-w-[12rem]">
+            <label for="task-oversight-filter-project" class="text-xs font-medium text-gray-700">
+                Project
+            </label>
+            <select id="task-oversight-filter-project"
+                    wire:model.live="filterProject"
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">All projects</option>
+                @foreach($projects as $project)
+                    <option value="{{ $project->id }}">{{ $project->name }}</option>
+                @endforeach
+            </select>
+        </div>
 
-        <select wire:model.live="perPage"
-                class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option value="15">15 per page</option>
-            <option value="20">20 per page</option>
-            <option value="50">50 per page</option>
-            <option value="100">100 per page</option>
-        </select>
+        <div class="flex flex-col gap-1 min-w-[9rem]">
+            <label for="task-oversight-per-page" class="text-xs font-medium text-gray-700">
+                Per page
+            </label>
+            <select id="task-oversight-per-page"
+                    wire:model.live="perPage"
+                    class="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="15">15 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+            </select>
+        </div>
     </div>
 
     {{-- Tasks table (read-only) --}}
