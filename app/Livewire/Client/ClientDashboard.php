@@ -3,7 +3,6 @@
 namespace App\Livewire\Client;
 
 use App\Models\Project;
-use App\Models\ProjectEvent;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
@@ -14,6 +13,9 @@ use Livewire\Component;
 #[Title('My Projects')]
 class ClientDashboard extends Component
 {
+    /** Sidebar shows this many rows; each source query is bounded the same so merge + take matches full data. */
+    private const int UPCOMING_SIDEBAR_LIMIT = 5;
+
     public ?int $selectedProjectId = null;
     public int  $month;
     public int  $year;
@@ -32,6 +34,10 @@ class ClientDashboard extends Component
 
     public function selectProject(int $id): void
     {
+        if (! $this->clientProjects()->whereKey($id)->exists()) {
+            return;
+        }
+
         $this->selectedProjectId = $id;
     }
 
@@ -61,6 +67,35 @@ class ClientDashboard extends Component
     private function clientProjects(): \Illuminate\Database\Eloquent\Builder
     {
         return Project::where('client_id', auth()->id())->orderBy('name');
+    }
+
+    /**
+     * Load the selected project only if it belongs to this client.
+     * Resets selectedProjectId when it is missing, deleted, or not owned (e.g. tampered request).
+     */
+    private function resolveSelectedProject(): ?Project
+    {
+        if ($this->selectedProjectId === null) {
+            return null;
+        }
+
+        $project = $this->clientProjects()
+            ->with(['tasks', 'events', 'teams'])
+            ->find($this->selectedProjectId);
+
+        if ($project) {
+            return $project;
+        }
+
+        $this->selectedProjectId = $this->clientProjects()->value('id');
+
+        if ($this->selectedProjectId === null) {
+            return null;
+        }
+
+        return $this->clientProjects()
+            ->with(['tasks', 'events', 'teams'])
+            ->find($this->selectedProjectId);
     }
 
     /**
@@ -176,12 +211,10 @@ class ClientDashboard extends Component
     {
         $projects = $this->clientProjects()->withCount('tasks')->get();
 
-        $selectedProject = $this->selectedProjectId
-            ? Project::with(['tasks', 'events', 'teams'])->find($this->selectedProjectId)
-            : null;
+        $selectedProject = $this->resolveSelectedProject();
 
-        $itemsByDay     = collect();
-        $upcomingEvents = collect();
+        $itemsByDay      = collect();
+        $upcomingItems   = collect();
 
         if ($selectedProject) {
             $monthStart = Carbon::create($this->year, $this->month, 1)->startOfDay();
@@ -189,11 +222,16 @@ class ClientDashboard extends Component
 
             $itemsByDay = $this->calendarItemsByDay($selectedProject, $monthStart, $monthEnd);
 
-            // Upcoming: merge events + task due dates, next 5 by date
+            // Upcoming: merge events + task due dates, next N by date.
+            // Each source is limited to N rows (sorted ascending): the global top N cannot need
+            // an (N+1)th row from either list without one of the first N from the other being earlier.
             $today = now()->startOfDay();
-            $upcomingEvents = $selectedProject->events()
+            $n     = self::UPCOMING_SIDEBAR_LIMIT;
+
+            $upcomingItems = $selectedProject->events()
                 ->where('event_date', '>=', $today)
                 ->orderBy('event_date')
+                ->limit($n)
                 ->get()
                 ->map(fn ($e) => [
                     'kind' => 'event',
@@ -208,6 +246,7 @@ class ClientDashboard extends Component
                 ->where('due_date', '>=', $today)
                 ->whereIn('status', ['pending', 'in_progress'])
                 ->orderBy('due_date')
+                ->limit($n)
                 ->get()
                 ->map(fn ($t) => [
                     'kind' => 'task',
@@ -218,9 +257,9 @@ class ClientDashboard extends Component
                     'status' => $t->status,
                 ]);
 
-            $upcomingEvents = $upcomingEvents->concat($upcomingTasks)
+            $upcomingItems = $upcomingItems->concat($upcomingTasks)
                 ->sortBy('date')
-                ->take(5)
+                ->take($n)
                 ->values();
         }
 
@@ -242,7 +281,7 @@ class ClientDashboard extends Component
             'projects'        => $projects,
             'selectedProject' => $selectedProject,
             'calendarGrid'    => $calendarGrid,
-            'upcomingEvents'  => $upcomingEvents,
+            'upcomingItems'   => $upcomingItems,
             'stats'           => $stats,
             'monthLabel'      => Carbon::create($this->year, $this->month, 1)->format('F Y'),
         ]);
