@@ -13,6 +13,9 @@ use Livewire\Component;
 #[Title('My Projects')]
 class ClientDashboard extends Component
 {
+    /** Sidebar shows this many rows; each source query is bounded the same so merge + take matches full data. */
+    private const int UPCOMING_SIDEBAR_LIMIT = 5;
+
     public ?int $selectedProjectId = null;
     public int  $month;
     public int  $year;
@@ -219,11 +222,16 @@ class ClientDashboard extends Component
 
             $itemsByDay = $this->calendarItemsByDay($selectedProject, $monthStart, $monthEnd);
 
-            // Upcoming: merge events + task due dates, next 5 by date
+            // Upcoming: merge events + task due dates, next N by date.
+            // Each source is limited to N rows (sorted ascending): the global top N cannot need
+            // an (N+1)th row from either list without one of the first N from the other being earlier.
             $today = now()->startOfDay();
+            $n     = self::UPCOMING_SIDEBAR_LIMIT;
+
             $upcomingItems = $selectedProject->events()
                 ->where('event_date', '>=', $today)
                 ->orderBy('event_date')
+                ->limit($n)
                 ->get()
                 ->map(fn ($e) => [
                     'kind' => 'event',
@@ -238,6 +246,7 @@ class ClientDashboard extends Component
                 ->where('due_date', '>=', $today)
                 ->whereIn('status', ['pending', 'in_progress'])
                 ->orderBy('due_date')
+                ->limit($n)
                 ->get()
                 ->map(fn ($t) => [
                     'kind' => 'task',
@@ -250,7 +259,7 @@ class ClientDashboard extends Component
 
             $upcomingItems = $upcomingItems->concat($upcomingTasks)
                 ->sortBy('date')
-                ->take(5)
+                ->take($n)
                 ->values();
         }
 
