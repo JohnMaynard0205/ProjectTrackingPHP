@@ -76,10 +76,10 @@
                                     @endif
                                 </td>
                                 <td class="px-6 py-4 text-gray-600">
-                                    <p>{{ $task->project->name }}</p>
-                                    <p class="text-xs text-gray-400">{{ $task->team->name }}</p>
+                                    <p>{{ $task->project?->name ?? '—' }}</p>
+                                    <p class="text-xs text-gray-400">{{ $task->team?->name ?? '—' }}</p>
                                 </td>
-                                <td class="px-6 py-4 text-gray-700">{{ $task->assignee->name }}</td>
+                                <td class="px-6 py-4 text-gray-700">{{ $task->assignee?->name ?? '—' }}</td>
                                 <td class="px-6 py-4 text-gray-600">
                                     {{ $task->creator?->name ?? '—' }}
                                 </td>
