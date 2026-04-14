@@ -91,17 +91,17 @@
                         <p class="text-xl font-bold text-gray-800">{{ $stats['total'] }}</p>
                         <p class="text-xs text-gray-400 mt-0.5">Total</p>
                     </div>
-                    <div class="bg-green-50 rounded-xl px-3 py-3 text-center">
-                        <p class="text-xl font-bold text-green-700">{{ $stats['done'] }}</p>
-                        <p class="text-xs text-green-500 mt-0.5">Done</p>
+                    <div class="bg-gray-50 rounded-xl px-3 py-3 text-center">
+                        <p class="text-xl font-bold text-gray-600">{{ $stats['pending'] }}</p>
+                        <p class="text-xs text-gray-400 mt-0.5">Pending</p>
                     </div>
                     <div class="bg-blue-50 rounded-xl px-3 py-3 text-center">
                         <p class="text-xl font-bold text-blue-700">{{ $stats['inProgress'] }}</p>
                         <p class="text-xs text-blue-500 mt-0.5">In Progress</p>
                     </div>
-                    <div class="bg-gray-50 rounded-xl px-3 py-3 text-center">
-                        <p class="text-xl font-bold text-gray-600">{{ $stats['pending'] }}</p>
-                        <p class="text-xs text-gray-400 mt-0.5">Pending</p>
+                    <div class="bg-green-50 rounded-xl px-3 py-3 text-center">
+                        <p class="text-xl font-bold text-green-700">{{ $stats['done'] }}</p>
+                        <p class="text-xs text-green-500 mt-0.5">Done</p>
                     </div>
                     <div class="bg-red-50 rounded-xl px-3 py-3 text-center">
                         <p class="text-xl font-bold text-red-600">{{ $stats['overdue'] }}</p>
@@ -188,7 +188,11 @@
             <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <h3 class="text-sm font-semibold text-gray-700">Project Timeline</h3>
-                    <span class="text-xs text-gray-400">{{ $events->count() }} event{{ $events->count() !== 1 ? 's' : '' }}</span>
+                    <span class="text-xs text-gray-400">
+                        {{ $events->count() }} event{{ $events->count() !== 1 ? 's' : '' }}
+                        •
+                        {{ $memberStartActivities->count() }} member start{{ $memberStartActivities->count() !== 1 ? 's' : '' }}
+                    </span>
                 </div>
                 @if(!$showEventForm)
                     <button wire:click="openCreateEvent"
@@ -259,7 +263,7 @@
                 </div>
             @endif
 
-            @if($events->isEmpty() && !$showEventForm)
+            @if($events->isEmpty() && $memberStartActivities->isEmpty() && !$showEventForm)
                 <div class="py-16 text-center text-gray-400">
                     <svg class="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -272,99 +276,137 @@
                     </button>
                 </div>
             @else
-                <div class="px-6 py-5">
-                    <ol class="relative border-l-2 border-gray-200 space-y-0">
-                        @foreach($events as $index => $event)
-                            @php
-                                $typeConfig = match($event->type) {
-                                    'milestone' => [
-                                        'dot'    => 'bg-indigo-600 ring-indigo-200',
-                                        'badge'  => 'bg-indigo-100 text-indigo-700',
-                                        'label'  => 'Milestone',
-                                    ],
-                                    'deadline' => [
-                                        'dot'    => 'bg-red-500 ring-red-200',
-                                        'badge'  => 'bg-red-100 text-red-700',
-                                        'label'  => 'Deadline',
-                                    ],
-                                    default => [
-                                        'dot'    => 'bg-emerald-500 ring-emerald-200',
-                                        'badge'  => 'bg-emerald-100 text-emerald-700',
-                                        'label'  => 'Update',
-                                    ],
-                                };
-                            @endphp
-                            <li class="mb-0 ml-6 pb-7 last:pb-0 relative
-                                       {{ $event->is_past && !$event->is_today ? 'opacity-60' : '' }}">
+                @if($events->isNotEmpty())
+                    <div class="px-6 py-5">
+                        <ol class="relative border-l-2 border-gray-200 space-y-0">
+                            @foreach($events as $index => $event)
+                                @php
+                                    $typeConfig = match($event->type) {
+                                        'milestone' => [
+                                            'dot'    => 'bg-indigo-600 ring-indigo-200',
+                                            'badge'  => 'bg-indigo-100 text-indigo-700',
+                                            'label'  => 'Milestone',
+                                        ],
+                                        'deadline' => [
+                                            'dot'    => 'bg-red-500 ring-red-200',
+                                            'badge'  => 'bg-red-100 text-red-700',
+                                            'label'  => 'Deadline',
+                                        ],
+                                        default => [
+                                            'dot'    => 'bg-emerald-500 ring-emerald-200',
+                                            'badge'  => 'bg-emerald-100 text-emerald-700',
+                                            'label'  => 'Update',
+                                        ],
+                                    };
+                                @endphp
+                                <li class="mb-0 ml-6 pb-7 last:pb-0 relative
+                                           {{ $event->is_past && !$event->is_today ? 'opacity-60' : '' }}">
 
-                                {{-- Dot on the line --}}
-                                <span class="absolute -left-[1.85rem] flex items-center justify-center w-6 h-6 rounded-full
-                                             ring-4 {{ $typeConfig['dot'] }} ring-white top-0.5">
-                                    @if($event->type === 'milestone')
-                                        <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                                        </svg>
-                                    @elseif($event->type === 'deadline')
-                                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 8v4m0 4h.01"/>
-                                        </svg>
-                                    @else
-                                        <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                        </svg>
-                                    @endif
-                                </span>
-
-                                {{-- Content --}}
-                                <div class="flex flex-wrap items-start justify-between gap-2">
-                                    <div class="flex-1 min-w-0">
-                                        <div class="flex items-center gap-2 flex-wrap mb-0.5">
-                                            <p class="text-sm font-semibold text-gray-900">{{ $event->title }}</p>
-                                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium {{ $typeConfig['badge'] }}">
-                                                {{ $typeConfig['label'] }}
-                                            </span>
-                                            @if($event->is_today)
-                                                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                                                    Today
-                                                </span>
-                                            @endif
-                                        </div>
-                                        @if($event->description)
-                                            <p class="text-xs text-gray-500 mt-0.5">{{ $event->description }}</p>
+                                    {{-- Dot on the line --}}
+                                    <span class="absolute -left-[1.85rem] flex items-center justify-center w-6 h-6 rounded-full
+                                                 ring-4 {{ $typeConfig['dot'] }} ring-white top-0.5">
+                                        @if($event->type === 'milestone')
+                                            <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                            </svg>
+                                        @elseif($event->type === 'deadline')
+                                            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 8v4m0 4h.01"/>
+                                            </svg>
+                                        @else
+                                            <svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                            </svg>
                                         @endif
-                                        {{-- Edit / delete --}}
-                                        <div class="flex items-center gap-3 mt-2">
-                                            <button wire:click="openEditEvent({{ $event->id }})"
-                                                    class="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition">
-                                                Edit
-                                            </button>
-                                            <button wire:click="deleteEvent({{ $event->id }})"
-                                                    wire:confirm="Remove this event from the timeline?"
-                                                    class="text-xs text-red-500 hover:text-red-700 font-medium transition">
-                                                Delete
-                                            </button>
+                                    </span>
+
+                                    {{-- Content --}}
+                                    <div class="flex flex-wrap items-start justify-between gap-2">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2 flex-wrap mb-0.5">
+                                                <p class="text-sm font-semibold text-gray-900">{{ $event->title }}</p>
+                                                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium {{ $typeConfig['badge'] }}">
+                                                    {{ $typeConfig['label'] }}
+                                                </span>
+                                                @if($event->is_today)
+                                                    <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                                        Today
+                                                    </span>
+                                                @endif
+                                            </div>
+                                            @if($event->description)
+                                                <p class="text-xs text-gray-500 mt-0.5">{{ $event->description }}</p>
+                                            @endif
+                                            {{-- Edit / delete --}}
+                                            <div class="flex items-center gap-3 mt-2">
+                                                <button wire:click="openEditEvent({{ $event->id }})"
+                                                        class="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition">
+                                                    Edit
+                                                </button>
+                                                <button wire:click="deleteEvent({{ $event->id }})"
+                                                        wire:confirm="Remove this event from the timeline?"
+                                                        class="text-xs text-red-500 hover:text-red-700 font-medium transition">
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="text-right flex-shrink-0">
+                                            <p class="text-sm font-semibold {{ $event->is_past && !$event->is_today ? 'text-gray-400' : 'text-gray-700' }}">
+                                                {{ $event->event_date->format('M d, Y') }}
+                                            </p>
+                                            <p class="text-xs mt-0.5
+                                                       {{ $event->days_diff < 0 ? 'text-red-400' : ($event->days_diff <= 7 && !$event->is_past ? 'text-orange-500 font-medium' : 'text-gray-400') }}">
+                                                @if($event->is_today)
+                                                    Today
+                                                @elseif($event->days_diff < 0)
+                                                    {{ abs($event->days_diff) }}d ago
+                                                @else
+                                                    in {{ $event->days_diff }}d
+                                                @endif
+                                            </p>
                                         </div>
                                     </div>
-                                    <div class="text-right flex-shrink-0">
-                                        <p class="text-sm font-semibold {{ $event->is_past && !$event->is_today ? 'text-gray-400' : 'text-gray-700' }}">
-                                            {{ $event->event_date->format('M d, Y') }}
-                                        </p>
-                                        <p class="text-xs mt-0.5
-                                                   {{ $event->days_diff < 0 ? 'text-red-400' : ($event->days_diff <= 7 && !$event->is_past ? 'text-orange-500 font-medium' : 'text-gray-400') }}">
-                                            @if($event->is_today)
-                                                Today
-                                            @elseif($event->days_diff < 0)
-                                                {{ abs($event->days_diff) }}d ago
-                                            @else
-                                                in {{ $event->days_diff }}d
-                                            @endif
-                                        </p>
+                                </li>
+                            @endforeach
+                        </ol>
+                    </div>
+                @endif
+
+                @if($memberStartActivities->isNotEmpty())
+                    <div class="px-6 py-5 border-t border-gray-100">
+                        <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Member Task Start Activity</h4>
+                        <ol class="relative border-l-2 border-gray-200 space-y-0">
+                            @foreach($memberStartActivities as $task)
+                                <li class="mb-0 ml-6 pb-6 last:pb-0 relative">
+                                    <span class="absolute -left-[1.85rem] flex items-center justify-center w-6 h-6 rounded-full ring-4 bg-blue-500 ring-white top-0.5">
+                                        <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6v6l4 2"/>
+                                        </svg>
+                                    </span>
+
+                                    <div class="flex flex-wrap items-start justify-between gap-2">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2 flex-wrap mb-0.5">
+                                                <p class="text-sm font-semibold text-gray-900">
+                                                    {{ $task->assignee->name }} started {{ $task->title }}
+                                                </p>
+                                                <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                                    Task Started
+                                                </span>
+                                            </div>
+                                            <p class="text-xs text-gray-500 mt-0.5">
+                                                Team {{ $task->team->name }} • Due {{ $task->due_date->format('M d, Y') }}
+                                            </p>
+                                        </div>
+                                        <div class="text-right flex-shrink-0">
+                                            <p class="text-sm font-semibold text-gray-700">{{ $task->start_date->format('M d, Y') }}</p>
+                                        </div>
                                     </div>
-                                </div>
-                            </li>
-                        @endforeach
-                    </ol>
-                </div>
+                                </li>
+                            @endforeach
+                        </ol>
+                    </div>
+                @endif
             @endif
         </div>
 
@@ -386,7 +428,7 @@
                     <ul class="divide-y divide-gray-50">
                         @foreach($selectedTeam->members as $member)
                             @php
-                                $memberTasks = $selectedTeam->tasks->where('assigned_to', $member->id);
+                                $memberTasks = $memberTasksMap->get($member->id, collect());
                                 $memberDone  = $memberTasks->where('status', 'done')->count();
                                 $memberTotal = $memberTasks->count();
                                 $memberPct   = $memberTotal > 0 ? (int) round(($memberDone / $memberTotal) * 100) : 0;
@@ -410,6 +452,72 @@
                             </li>
                         @endforeach
                     </ul>
+                @endif
+            </div>
+
+            {{-- Assigned tasks by member --}}
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-100">
+                    <h3 class="text-sm font-semibold text-gray-700">Assigned Tasks by Member</h3>
+                </div>
+
+                @if($selectedTeam->members->isEmpty())
+                    <div class="px-5 py-8 text-center text-gray-400 text-xs">
+                        No members assigned yet.
+                    </div>
+                @else
+                    <div class="divide-y divide-gray-100">
+                        @foreach($selectedTeam->members as $member)
+                            @php $assignedTasks = $memberTasksMap->get($member->id, collect()); @endphp
+                            <div class="px-5 py-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-sm font-medium text-gray-800 truncate">{{ $member->name }}</p>
+                                    <span class="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+                                        {{ $assignedTasks->count() }} task{{ $assignedTasks->count() !== 1 ? 's' : '' }}
+                                    </span>
+                                </div>
+
+                                @if($assignedTasks->isEmpty())
+                                    <p class="text-xs text-gray-400">No tasks assigned.</p>
+                                @else
+                                    <ul class="space-y-2">
+                                        @foreach($assignedTasks as $task)
+                                            @php
+                                                $statusLabel = match($task->status) {
+                                                    'pending'     => 'Pending',
+                                                    'in_progress' => 'In Progress',
+                                                    'done'        => 'Done',
+                                                    default       => ucfirst($task->status),
+                                                };
+
+                                                $statusClass = match($task->status) {
+                                                    'pending'     => 'bg-gray-100 text-gray-600',
+                                                    'in_progress' => 'bg-blue-100 text-blue-700',
+                                                    'done'        => 'bg-green-100 text-green-700',
+                                                    default       => 'bg-gray-100 text-gray-500',
+                                                };
+                                            @endphp
+                                            <li class="p-2 rounded-lg border border-gray-100 bg-gray-50">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <p class="text-xs font-medium text-gray-700 leading-5">{{ $task->title }}</p>
+                                                    <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap {{ $statusClass }}">
+                                                        {{ $statusLabel }}
+                                                    </span>
+                                                </div>
+                                                <div class="flex items-center gap-3 text-[11px] text-gray-400 mt-1">
+                                                    <p>
+                                                        Start
+                                                        {{ $task->start_date ? $task->start_date->format('M d, Y') : 'Not set' }}
+                                                    </p>
+                                                    <p>Due {{ $task->due_date->format('M d, Y') }}</p>
+                                                </div>
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
                 @endif
             </div>
 

@@ -151,6 +151,8 @@ class TeamLeadDashboard extends Component
         $project         = null;
         $stats           = null;
         $tasksByPriority = collect();
+        $memberTasksMap  = collect();
+        $memberStartActivities = collect();
         $events          = collect();
         $daysRemaining   = null;
         $progressPct     = 0;
@@ -180,6 +182,13 @@ class TeamLeadDashboard extends Component
                 ];
 
                 $tasksByPriority = $tasks->groupBy('priority');
+                $memberTasksMap  = $tasks
+                    ->sortBy(fn ($task) => optional($task->due_date)->timestamp ?? PHP_INT_MAX)
+                    ->groupBy('assigned_to');
+                $memberStartActivities = $tasks
+                    ->filter(fn ($task) => !is_null($task->start_date))
+                    ->sortByDesc('start_date')
+                    ->values();
 
                 $events = $project->events()
                     ->orderBy('event_date')
@@ -199,7 +208,7 @@ class TeamLeadDashboard extends Component
 
         return view('livewire.lead.team-lead-dashboard', compact(
             'teams', 'selectedTeam', 'project', 'stats',
-            'tasksByPriority', 'events', 'daysRemaining', 'progressPct',
+            'tasksByPriority', 'memberTasksMap', 'memberStartActivities', 'events', 'daysRemaining', 'progressPct',
         ));
     }
 }

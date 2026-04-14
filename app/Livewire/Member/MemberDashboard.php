@@ -75,7 +75,14 @@ class MemberDashboard extends Component
             return;
         }
 
-        $task->update(['status' => $newStatus]);
+        $updates = ['status' => $newStatus];
+
+        // Capture the real start moment: first time a member moves task to in progress.
+        if ($newStatus === 'in_progress' && !$task->start_date) {
+            $updates['start_date'] = now()->toDateString();
+        }
+
+        $task->update($updates);
 
         $this->flash = match ($newStatus) {
             'in_progress' => 'Task marked as In Progress.',
