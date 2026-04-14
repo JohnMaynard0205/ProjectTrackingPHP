@@ -86,7 +86,7 @@
                     </div>
                     <div class="bg-blue-50 rounded-lg px-4 py-3 text-center">
                         <p class="text-2xl font-bold text-blue-700">{{ $stats['pendingTasks'] }}</p>
-                        <p class="text-xs text-blue-500 mt-0.5">In Progress</p>
+                        <p class="text-xs text-blue-500 mt-0.5">Active tasks</p>
                     </div>
                     <div class="bg-red-50 rounded-lg px-4 py-3 text-center">
                         <p class="text-2xl font-bold text-red-600">{{ $stats['overdueTasks'] }}</p>
@@ -152,20 +152,24 @@
                                             {{ $cell['day'] }}
                                         </span>
 
-                                        {{-- Events on this day --}}
-                                        @if($cell['events']->isNotEmpty())
+                                        {{-- Events + tasks on this day --}}
+                                        @if($cell['items']->isNotEmpty())
                                             <div class="mt-1 space-y-0.5">
-                                                @foreach($cell['events'] as $event)
+                                                @foreach($cell['items'] as $item)
                                                     @php
-                                                        $dot = match($event->type) {
-                                                            'milestone' => 'bg-indigo-500 text-white',
-                                                            'deadline'  => 'bg-red-500 text-white',
-                                                            default     => 'bg-emerald-500 text-white',
+                                                        $dot = match (true) {
+                                                            ($item['kind'] ?? '') === 'task' && ($item['variant'] ?? '') === 'task_start'
+                                                                => 'bg-slate-500 text-white',
+                                                            ($item['kind'] ?? '') === 'task'
+                                                                => 'bg-amber-500 text-white',
+                                                            ($item['type'] ?? '') === 'milestone' => 'bg-indigo-500 text-white',
+                                                            ($item['type'] ?? '') === 'deadline'  => 'bg-red-500 text-white',
+                                                            default => 'bg-emerald-500 text-white',
                                                         };
                                                     @endphp
                                                     <div class="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs {{ $dot }} truncate"
-                                                         title="{{ $event->title }}">
-                                                        <span class="truncate">{{ $event->title }}</span>
+                                                         title="{{ $item['title'] }}">
+                                                        <span class="truncate">{{ $item['title'] }}</span>
                                                     </div>
                                                 @endforeach
                                             </div>
@@ -178,7 +182,7 @@
                 </div>
 
                 {{-- Legend --}}
-                <div class="flex items-center gap-4 px-6 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-3 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
                     <span class="flex items-center gap-1.5">
                         <span class="w-3 h-3 rounded bg-indigo-500"></span> Milestone
                     </span>
@@ -188,54 +192,69 @@
                     <span class="flex items-center gap-1.5">
                         <span class="w-3 h-3 rounded bg-emerald-500"></span> Update
                     </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded bg-amber-500"></span> Task due
+                    </span>
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded bg-slate-500"></span> Task start
+                    </span>
                 </div>
             </div>
 
-            {{-- Upcoming events sidebar --}}
+            {{-- Upcoming items sidebar (events + task due dates) --}}
             <div class="space-y-4">
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                     <div class="px-5 py-4 border-b border-gray-100">
-                        <h3 class="text-sm font-semibold text-gray-700">Upcoming Events</h3>
+                        <h3 class="text-sm font-semibold text-gray-700">Upcoming</h3>
+                        <p class="text-xs text-gray-400 mt-0.5">Events and task due dates</p>
                     </div>
 
-                    @if($upcomingEvents->isEmpty())
+                    @if($upcomingItems->isEmpty())
                         <div class="px-5 py-10 text-center text-gray-400">
                             <svg class="w-8 h-8 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                                       d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                             </svg>
-                            <p class="text-xs">No upcoming events.</p>
+                            <p class="text-xs">No upcoming events or task deadlines.</p>
                         </div>
                     @else
                         <ul class="divide-y divide-gray-50">
-                            @foreach($upcomingEvents as $event)
+                            @foreach($upcomingItems as $row)
                                 @php
-                                    $typeColor = match($event->type) {
+                                    $isTask = ($row['kind'] ?? '') === 'task';
+                                    $typeKey = $isTask ? 'task_due' : ($row['type'] ?? 'update');
+                                    $typeColor = match($typeKey) {
                                         'milestone' => 'border-indigo-400 bg-indigo-50',
                                         'deadline'  => 'border-red-400 bg-red-50',
+                                        'task_due'  => 'border-amber-400 bg-amber-50',
                                         default     => 'border-emerald-400 bg-emerald-50',
                                     };
-                                    $typeLabel = match($event->type) {
+                                    $typeLabelClass = match($typeKey) {
                                         'milestone' => 'text-indigo-600',
                                         'deadline'  => 'text-red-600',
+                                        'task_due'  => 'text-amber-700',
                                         default     => 'text-emerald-600',
                                     };
-                                    $daysAway = now()->startOfDay()->diffInDays($event->event_date, false);
+                                    $typeText = $isTask
+                                        ? 'Task due ('.str_replace('_', ' ', $row['status'] ?? '').')'
+                                        : ucfirst(str_replace('_', ' ', $row['type'] ?? 'event'));
+                                    $when = $row['date'];
+                                    $daysAway = now()->startOfDay()->diffInDays($when, false);
                                 @endphp
                                 <li class="flex gap-3 px-5 py-4">
                                     <div class="flex-shrink-0 w-1 rounded-full {{ $typeColor }} border-l-2 self-stretch"></div>
                                     <div class="flex-1 min-w-0">
-                                        <p class="text-sm font-medium text-gray-800 truncate">{{ $event->title }}</p>
-                                        <p class="text-xs {{ $typeLabel }} mt-0.5">
-                                            {{ ucfirst($event->type) }}
+                                        <p class="text-sm font-medium text-gray-800 truncate">{{ $row['title'] }}</p>
+                                        <p class="text-xs {{ $typeLabelClass }} mt-0.5">
+                                            {{ $typeText }}
                                         </p>
-                                        @if($event->description)
-                                            <p class="text-xs text-gray-400 mt-0.5 line-clamp-2">{{ $event->description }}</p>
+                                        @if(!empty($row['description']))
+                                            <p class="text-xs text-gray-400 mt-0.5 line-clamp-2">{{ $row['description'] }}</p>
                                         @endif
                                     </div>
                                     <div class="flex-shrink-0 text-right">
                                         <p class="text-sm font-semibold text-gray-700">
-                                            {{ $event->event_date->format('M d') }}
+                                            {{ $when->format('M d') }}
                                         </p>
                                         <p class="text-xs text-gray-400">
                                             @if($daysAway === 0)
