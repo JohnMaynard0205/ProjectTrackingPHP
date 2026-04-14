@@ -216,7 +216,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="{{ $isOverdue ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
-                                    {{ $task->due_date->format('M d, Y') }}
+                                    {{ $task->due_date ? $task->due_date->format('M d, Y') : '—' }}
                                 </span>
                                 @if($isOverdue)
                                     <span class="block text-xs text-red-400">Overdue</span>

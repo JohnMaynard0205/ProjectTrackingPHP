@@ -395,7 +395,7 @@
                                                 </span>
                                             </div>
                                             <p class="text-xs text-gray-500 mt-0.5">
-                                                Team {{ $task->team->name }} • Due {{ $task->due_date->format('M d, Y') }}
+                                                Team {{ $task->team->name }} • Due {{ $task->due_date ? $task->due_date->format('M d, Y') : '—' }}
                                             </p>
                                         </div>
                                         <div class="text-right flex-shrink-0">
@@ -509,7 +509,7 @@
                                                         Start
                                                         {{ $task->start_date ? $task->start_date->format('M d, Y') : 'Not set' }}
                                                     </p>
-                                                    <p>Due {{ $task->due_date->format('M d, Y') }}</p>
+                                                    <p>Due {{ $task->due_date ? $task->due_date->format('M d, Y') : '—' }}</p>
                                                 </div>
                                             </li>
                                         @endforeach
@@ -543,7 +543,7 @@
                                 <p class="text-sm font-medium text-red-800 truncate">{{ $task->title }}</p>
                                 <div class="flex items-center justify-between mt-0.5">
                                     <p class="text-xs text-red-500">{{ $task->assignee->name }}</p>
-                                    <p class="text-xs text-red-400">Due {{ $task->due_date->format('M d') }}</p>
+                                    <p class="text-xs text-red-400">Due {{ $task->due_date ? $task->due_date->format('M d') : '—' }}</p>
                                 </div>
                             </li>
                         @endforeach
