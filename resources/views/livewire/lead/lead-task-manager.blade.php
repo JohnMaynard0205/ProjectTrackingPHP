@@ -120,12 +120,14 @@
                     </div>
                 @endif
 
-                {{-- Start Date --}}
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                    <input wire:model="startDate" type="date"
-                           class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
+                {{-- Actual start date (edit only) --}}
+                @if($editingId)
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Actual Start Date</label>
+                        <input wire:model="startDate" type="date"
+                               class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                @endif
 
                 {{-- Due Date --}}
                 <div>
@@ -214,7 +216,7 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="{{ $isOverdue ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
-                                    {{ $task->due_date->format('M d, Y') }}
+                                    {{ $task->due_date ? $task->due_date->format('M d, Y') : '—' }}
                                 </span>
                                 @if($isOverdue)
                                     <span class="block text-xs text-red-400">Overdue</span>

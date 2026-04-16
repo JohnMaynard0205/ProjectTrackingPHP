@@ -265,7 +265,7 @@
                                             <div class="text-right">
                                                 <p class="text-xs font-semibold
                                                            {{ $isOverdue ? 'text-red-600' : ($isDueToday ? 'text-amber-600' : 'text-gray-600') }}">
-                                                    {{ $task->due_date->format('M d, Y') }}
+                                                    {{ $task->due_date ? $task->due_date->format('M d, Y') : '—' }}
                                                 </p>
                                                 <p class="text-xs {{ $isOverdue ? 'text-red-400' : ($isDueToday ? 'text-amber-500' : 'text-gray-400') }}">
                                                     @if($isOverdue)
