@@ -34,6 +34,39 @@ class TeamLeadDashboard extends Component
     {
         $this->selectedTeamId = $id;
         $this->cancelEventForm();
+        $this->closeMemberTasksModal();
+    }
+
+    // ── Member tasks modal ─────────────────────────────────────────────────────
+
+    public bool $showMemberTasksModal = false;
+
+    public ?int $modalMemberId = null;
+
+    public function openMemberTasks(int $userId): void
+    {
+        if (! $this->selectedTeamId) {
+            return;
+        }
+
+        $allowed = Team::query()
+            ->whereKey($this->selectedTeamId)
+            ->where('lead_id', auth()->id())
+            ->whereHas('members', fn ($q) => $q->whereKey($userId))
+            ->exists();
+
+        if (! $allowed) {
+            return;
+        }
+
+        $this->modalMemberId         = $userId;
+        $this->showMemberTasksModal = true;
+    }
+
+    public function closeMemberTasksModal(): void
+    {
+        $this->showMemberTasksModal = false;
+        $this->modalMemberId        = null;
     }
 
     // ── Event CRUD ────────────────────────────────────────────────────────────
@@ -206,9 +239,18 @@ class TeamLeadDashboard extends Component
             }
         }
 
+        $modalMember      = null;
+        $modalMemberTasks = collect();
+        if ($this->showMemberTasksModal && $this->modalMemberId && $selectedTeam
+            && $selectedTeam->members->contains('id', $this->modalMemberId)) {
+            $modalMember      = $selectedTeam->members->firstWhere('id', $this->modalMemberId);
+            $modalMemberTasks = $memberTasksMap->get($this->modalMemberId, collect());
+        }
+
         return view('livewire.lead.team-lead-dashboard', compact(
             'teams', 'selectedTeam', 'project', 'stats',
             'tasksByPriority', 'memberTasksMap', 'memberStartActivities', 'events', 'daysRemaining', 'progressPct',
+            'modalMember', 'modalMemberTasks',
         ));
     }
 }

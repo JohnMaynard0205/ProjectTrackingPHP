@@ -433,8 +433,10 @@
                                 $memberTotal = $memberTasks->count();
                                 $memberPct   = $memberTotal > 0 ? (int) round(($memberDone / $memberTotal) * 100) : 0;
                             @endphp
-                            <li class="px-5 py-3">
-                                <div class="flex items-center gap-3">
+                            <li class="relative">
+                                <button type="button"
+                                        wire:click="openMemberTasks({{ $member->id }})"
+                                        class="w-full px-5 py-3 text-left flex items-center gap-3 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-inset transition cursor-pointer">
                                     <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
                                         {{ strtoupper(substr($member->name, 0, 1)) }}
                                     </div>
@@ -448,7 +450,8 @@
                                             <span class="text-xs text-gray-400 flex-shrink-0">{{ $memberDone }}/{{ $memberTotal }}</span>
                                         </div>
                                     </div>
-                                </div>
+                                    <span class="text-xs text-indigo-500 flex-shrink-0 hidden sm:inline">View tasks</span>
+                                </button>
                             </li>
                         @endforeach
                     </ul>
@@ -553,6 +556,78 @@
 
         </div>
     </div>
+
+    {{-- Member assigned tasks modal --}}
+    @if($showMemberTasksModal && $modalMember)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="member-tasks-modal-title">
+            <div class="absolute inset-0 bg-gray-900/50 backdrop-blur-sm"
+                 wire:click="closeMemberTasksModal"></div>
+            <div class="relative w-full max-w-lg max-h-[85vh] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl flex flex-col"
+                 @click.stop>
+                <div class="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+                    <div>
+                        <h3 id="member-tasks-modal-title" class="text-base font-semibold text-gray-900">
+                            Tasks for {{ $modalMember->name }}
+                        </h3>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                            {{ $modalMemberTasks->count() }} assigned in this team
+                        </p>
+                    </div>
+                    <button type="button"
+                            wire:click="closeMemberTasksModal"
+                            class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Close">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-y-auto px-5 py-4">
+                    @if($modalMemberTasks->isEmpty())
+                        <p class="text-sm text-gray-500 text-center py-8">No tasks assigned to this member on this team yet.</p>
+                    @else
+                        <ul class="space-y-3">
+                            @foreach($modalMemberTasks as $task)
+                                @php
+                                    $statusLabel = match($task->status) {
+                                        'pending'     => 'Pending',
+                                        'in_progress' => 'In progress',
+                                        'done'        => 'Done',
+                                        default       => ucfirst($task->status),
+                                    };
+                                    $statusClass = match($task->status) {
+                                        'pending'     => 'bg-gray-100 text-gray-600',
+                                        'in_progress' => 'bg-blue-100 text-blue-700',
+                                        'done'        => 'bg-green-100 text-green-700',
+                                        default       => 'bg-gray-100 text-gray-500',
+                                    };
+                                @endphp
+                                <li class="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <p class="text-sm font-medium text-gray-800">{{ $task->title }}</p>
+                                        <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ $statusClass }}">
+                                            {{ $statusLabel }}
+                                        </span>
+                                    </div>
+                                    @if($task->description)
+                                        <p class="text-xs text-gray-500 mt-1.5 line-clamp-2">{{ $task->description }}</p>
+                                    @endif
+                                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
+                                        <span>Start {{ $task->start_date?->format('M d, Y') ?? '—' }}</span>
+                                        <span>Due {{ $task->due_date?->format('M d, Y') ?? '—' }}</span>
+                                        <span class="text-gray-400">{{ ucfirst($task->priority) }} priority</span>
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
 
     @endif
 </div>
