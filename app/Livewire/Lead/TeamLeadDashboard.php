@@ -22,6 +22,9 @@ class TeamLeadDashboard extends Component
     public string $eventDate        = '';
     public string $eventType        = 'update';
 
+    public bool $confirmingDeleteEvent = false;
+    public ?int $deleteEventId = null;
+
     public function mount(): void
     {
         $first = auth()->user()->ledTeams()->first();
@@ -32,8 +35,45 @@ class TeamLeadDashboard extends Component
 
     public function selectTeam(int $id): void
     {
+        if (! auth()->user()->ledTeams()->whereKey($id)->exists()) {
+            return;
+        }
+
         $this->selectedTeamId = $id;
         $this->cancelEventForm();
+        $this->closeMemberTasksModal();
+    }
+
+    // ── Member tasks modal ─────────────────────────────────────────────────────
+
+    public bool $showMemberTasksModal = false;
+
+    public ?int $modalMemberId = null;
+
+    public function openMemberTasks(int $userId): void
+    {
+        if (! $this->selectedTeamId) {
+            return;
+        }
+
+        $allowed = Team::query()
+            ->whereKey($this->selectedTeamId)
+            ->where('lead_id', auth()->id())
+            ->whereHas('members', fn ($q) => $q->whereKey($userId))
+            ->exists();
+
+        if (! $allowed) {
+            return;
+        }
+
+        $this->modalMemberId         = $userId;
+        $this->showMemberTasksModal = true;
+    }
+
+    public function closeMemberTasksModal(): void
+    {
+        $this->showMemberTasksModal = false;
+        $this->modalMemberId        = null;
     }
 
     // ── Event CRUD ────────────────────────────────────────────────────────────
@@ -88,10 +128,39 @@ class TeamLeadDashboard extends Component
 
     public function deleteEvent(int $id): void
     {
-        $event = ProjectEvent::findOrFail($id);
+        $event = ProjectEvent::find($id);
+
+        if (! $event) {
+            return;
+        }
+
         $this->authorizeEvent($event);
         $event->delete();
         session()->flash('event_success', 'Event removed.');
+    }
+
+    public function confirmDeleteEvent(int $id): void
+    {
+        $event = ProjectEvent::findOrFail($id);
+        $this->authorizeEvent($event);
+
+        $this->deleteEventId = $id;
+        $this->confirmingDeleteEvent = true;
+    }
+
+    public function deleteEventConfirmed(): void
+    {
+        if ($this->deleteEventId) {
+            $this->deleteEvent($this->deleteEventId);
+        }
+
+        $this->cancelDeleteEvent();
+    }
+
+    public function cancelDeleteEvent(): void
+    {
+        $this->confirmingDeleteEvent = false;
+        $this->deleteEventId = null;
     }
 
     public function cancelEventForm(): void
@@ -135,7 +204,7 @@ class TeamLeadDashboard extends Component
     /** Returns the Project for the currently selected team. */
     private function currentProject()
     {
-        return Team::findOrFail($this->selectedTeamId)->project;
+        return auth()->user()->ledTeams()->findOrFail($this->selectedTeamId)->project;
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -158,7 +227,7 @@ class TeamLeadDashboard extends Component
         $progressPct     = 0;
 
         if ($this->selectedTeamId) {
-            $selectedTeam = Team::with([
+            $selectedTeam = auth()->user()->ledTeams()->with([
                 'project.events',
                 'members',
                 'tasks.assignee',
@@ -206,9 +275,18 @@ class TeamLeadDashboard extends Component
             }
         }
 
+        $modalMember      = null;
+        $modalMemberTasks = collect();
+        if ($this->showMemberTasksModal && $this->modalMemberId && $selectedTeam
+            && $selectedTeam->members->contains('id', $this->modalMemberId)) {
+            $modalMember      = $selectedTeam->members->firstWhere('id', $this->modalMemberId);
+            $modalMemberTasks = $memberTasksMap->get($this->modalMemberId, collect());
+        }
+
         return view('livewire.lead.team-lead-dashboard', compact(
             'teams', 'selectedTeam', 'project', 'stats',
             'tasksByPriority', 'memberTasksMap', 'memberStartActivities', 'events', 'daysRemaining', 'progressPct',
+            'modalMember', 'modalMemberTasks',
         ));
     }
 }
