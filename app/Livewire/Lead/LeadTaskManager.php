@@ -4,6 +4,7 @@ namespace App\Livewire\Lead;
 
 use App\Models\Task;
 use App\Models\Team;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -22,7 +23,7 @@ class LeadTaskManager extends Component
     public string $title          = '';
     public string $description    = '';
     public ?int   $teamId         = null;
-    public ?int   $assignedTo     = null;
+    public array  $assignedTo     = [];
     public string $startDate      = '';
     public string $dueDate        = '';
     public string $status         = 'pending';
@@ -58,7 +59,13 @@ class LeadTaskManager extends Component
         $this->title       = $task->title;
         $this->description = $task->description ?? '';
         $this->teamId      = $task->team_id;
-        $this->assignedTo  = $task->assigned_to;
+        $this->assignedTo = collect([$task->assigned_to])
+            ->filter()
+            ->merge($task->assignees()->orderBy('users.name')->pluck('users.id'))
+            ->unique()
+            ->map(fn ($id) => (string) $id)
+            ->values()
+            ->all();
         $this->startDate   = $task->start_date?->toDateString() ?? '';
         $this->dueDate     = $task->due_date->toDateString();
         $this->status      = $task->status;
@@ -77,7 +84,7 @@ class LeadTaskManager extends Component
     /** When team changes, reset the assignee so the dropdown refreshes. */
     public function updatedTeamId(): void
     {
-        $this->assignedTo = null;
+        $this->assignedTo = [];
     }
 
     // ── Save / Delete ─────────────────────────────────────────────────────────
@@ -88,7 +95,8 @@ class LeadTaskManager extends Component
             'title'       => 'required|string|max:255',
             'description' => 'nullable|string',
             'teamId'      => 'required|exists:teams,id',
-            'assignedTo'  => 'required|exists:users,id',
+            'assignedTo'  => 'required|array|min:1',
+            'assignedTo.*' => 'integer|exists:users,id',
             'startDate'   => 'nullable|date',
             'dueDate'     => 'required|date',
             'status'      => 'required|in:pending,in_progress,done',
@@ -97,13 +105,23 @@ class LeadTaskManager extends Component
 
         // Ensure the team belongs to this lead
         $team = $this->ownedTeam($data['teamId']);
+        $assigneeIds = collect($data['assignedTo'])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $validMemberIds = $team->members()->whereIn('users.id', $assigneeIds)->pluck('users.id');
+
+        if ($validMemberIds->count() !== $assigneeIds->count()) {
+            $this->addError('assignedTo', 'Choose members from the selected team.');
+            return;
+        }
 
         $payload = [
             'title'       => $data['title'],
             'description' => $data['description'],
             'project_id'  => $team->project_id,
             'team_id'     => $team->id,
-            'assigned_to' => $data['assignedTo'],
+            'assigned_to' => $assigneeIds->first(),
             'start_date'  => $this->editingId ? ($data['startDate'] ?: null) : null,
             'due_date'    => $data['dueDate'],
             'status'      => $data['status'],
@@ -111,10 +129,19 @@ class LeadTaskManager extends Component
         ];
 
         if ($this->editingId) {
-            $this->ownedTask($this->editingId)->update($payload);
+            DB::transaction(function () use ($payload, $assigneeIds) {
+                $task = $this->ownedTask($this->editingId);
+                $task->update($payload);
+                $task->assignees()->sync($assigneeIds->all());
+            });
+
             session()->flash('success', 'Task updated.');
         } else {
-            Task::create(array_merge($payload, ['created_by' => auth()->id()]));
+            DB::transaction(function () use ($payload, $assigneeIds) {
+                $task = Task::create(array_merge($payload, ['created_by' => auth()->id()]));
+                $task->assignees()->sync($assigneeIds->all());
+            });
+
             session()->flash('success', 'Task created and assigned.');
         }
 
@@ -177,7 +204,7 @@ class LeadTaskManager extends Component
         $this->title       = '';
         $this->description = '';
         $this->teamId      = null;
-        $this->assignedTo  = null;
+        $this->assignedTo  = [];
         $this->startDate   = '';
         $this->dueDate     = '';
         $this->status      = 'pending';
@@ -192,7 +219,7 @@ class LeadTaskManager extends Component
         $leadTeams = auth()->user()->ledTeams()->with('project')->get();
 
         // Tasks visible to this lead — filtered
-        $tasks = Task::with(['assignee', 'team', 'project'])
+        $tasks = Task::with(['assignee', 'assignees', 'team', 'project'])
             ->whereIn('team_id', $leadTeams->pluck('id'))
             ->when($this->filterTeamId, fn ($q) => $q->where('team_id', $this->filterTeamId))
             ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
