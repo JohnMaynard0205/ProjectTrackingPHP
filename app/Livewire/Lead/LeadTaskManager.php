@@ -137,6 +137,7 @@ class LeadTaskManager extends Component
         if ($this->editingId) {
             $existingTask = $this->ownedTask($this->editingId);
             $oldDueDate = $existingTask->due_date?->toDateString();
+            $oldStatus = $existingTask->status;
             $previousAssigneeIds = $existingTask
                 ->assignees()
                 ->pluck('users.id')
@@ -144,14 +145,19 @@ class LeadTaskManager extends Component
                 ->filter()
                 ->unique();
 
-            DB::transaction(function () use ($payload, $assigneeIds, $oldDueDate, $previousAssigneeIds) {
+            DB::transaction(function () use ($payload, $assigneeIds, $oldDueDate, $oldStatus, $previousAssigneeIds) {
                 $task = $this->ownedTask($this->editingId);
+                $statusChanged = $task->status !== $payload['status'];
                 $task->update($payload);
                 $task->assignees()->sync($assigneeIds->all());
-                $this->syncMemberProgressRows($task, $assigneeIds);
+                $this->syncMemberProgressRows($task, $assigneeIds, $statusChanged ? $payload['status'] : null);
 
                 if ($oldDueDate !== $payload['due_date']) {
                     $this->recordActivity($task, 'due_date_changed', auth()->user()->name . ' changed due date from ' . ($oldDueDate ?: 'none') . ' to ' . $payload['due_date'] . '.');
+                }
+
+                if ($statusChanged) {
+                    $this->recordActivity($task, 'status_changed', auth()->user()->name . ' changed status from ' . str_replace('_', ' ', $oldStatus) . ' to ' . str_replace('_', ' ', $payload['status']) . '.');
                 }
 
                 $this->notifyAssignedMembers($task, $assigneeIds->diff($previousAssigneeIds));
@@ -161,7 +167,7 @@ class LeadTaskManager extends Component
             DB::transaction(function () use ($payload, $assigneeIds) {
                 $task = Task::create(array_merge($payload, ['created_by' => auth()->id()]));
                 $task->assignees()->sync($assigneeIds->all());
-                $this->syncMemberProgressRows($task, $assigneeIds);
+                $this->syncMemberProgressRows($task, $assigneeIds, $payload['status']);
                 $this->recordActivity($task, 'created', auth()->user()->name . ' assigned this task.');
                 $this->notifyAssignedMembers($task, $assigneeIds);
             });
@@ -209,8 +215,13 @@ class LeadTaskManager extends Component
 
         $task = $this->ownedTask($id);
         $oldStatus = $task->status;
-        $task->update(['status' => $status]);
-        $this->recordActivity($task, 'status_changed', auth()->user()->name . ' changed status from ' . str_replace('_', ' ', $oldStatus) . ' to ' . str_replace('_', ' ', $status) . '.');
+
+        DB::transaction(function () use ($task, $oldStatus, $status) {
+            $task->update(['status' => $status]);
+            $assigneeIds = $task->assignees()->pluck('users.id')->push($task->assigned_to)->filter()->unique()->values();
+            $this->syncMemberProgressRows($task, $assigneeIds, $status);
+            $this->recordActivity($task, 'status_changed', auth()->user()->name . ' changed status from ' . str_replace('_', ' ', $oldStatus) . ' to ' . str_replace('_', ' ', $status) . '.');
+        });
     }
 
     public function toggleTaskDetails(int $id): void
@@ -284,18 +295,34 @@ class LeadTaskManager extends Component
             });
     }
 
-    private function syncMemberProgressRows(Task $task, $assigneeIds): void
+    private function syncMemberProgressRows(Task $task, $assigneeIds, ?string $status = null): void
     {
         TaskMemberProgress::where('task_id', $task->id)
             ->whereNotIn('user_id', $assigneeIds)
             ->delete();
 
         foreach ($assigneeIds as $userId) {
-            TaskMemberProgress::firstOrCreate(
+            $progress = TaskMemberProgress::firstOrCreate(
                 ['task_id' => $task->id, 'user_id' => $userId],
                 ['status' => 'pending', 'progress' => 0]
             );
+
+            if ($status) {
+                $progress->status = $status;
+                $progress->progress = $this->progressValueForStatus($status);
+                $progress->completed_at = $status === 'done' ? now() : null;
+                $progress->save();
+            }
         }
+    }
+
+    private function progressValueForStatus(string $status): int
+    {
+        return match ($status) {
+            'done' => 100,
+            'in_progress' => 50,
+            default => 0,
+        };
     }
 
     private function recordActivity(Task $task, string $type, string $description): void

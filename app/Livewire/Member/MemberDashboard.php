@@ -92,10 +92,11 @@ class MemberDashboard extends Component
             $task->update($updates);
         }
         $this->syncOverallTaskStatus($task->fresh(['memberProgress']));
-        $this->recordStatusActivity($task, $oldStatus, $newStatus);
+        $task = $task->fresh(['team']);
+        $this->recordStatusActivity($task, $oldStatus, $task->status);
 
-        if ($newStatus === 'done' && $oldStatus !== 'done') {
-            $this->notifyTaskCompleted($task->fresh(['team']));
+        if ($task->status === 'done' && $oldStatus !== 'done') {
+            $this->notifyTaskCompleted($task);
         }
 
         $this->flash = match ($newStatus) {

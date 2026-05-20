@@ -48,7 +48,7 @@
                     <div>
                         <p class="text-sm font-semibold text-gray-900">{{ $log->task?->title }}</p>
                         <p class="mt-0.5 text-xs text-gray-500">
-                            {{ $log->user->name }} / {{ $log->task?->team?->name }} / {{ $log->task?->project?->name }}
+                            {{ $log->user?->name ?? 'Deleted user' }} / {{ $log->task?->team?->name }} / {{ $log->task?->project?->name }}
                         </p>
                     </div>
                     <div class="text-right">
@@ -70,4 +70,6 @@
             </div>
         @endforelse
     </div>
+
+    {{ $logs->links() }}
 </div>

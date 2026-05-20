@@ -22,8 +22,7 @@ class NotificationBell extends Component
     {
         InAppNotification::where('user_id', auth()->id())
             ->whereNull('read_at')
-            ->get()
-            ->each->markAsRead();
+            ->update(['read_at' => now()]);
     }
 
     public function render()
