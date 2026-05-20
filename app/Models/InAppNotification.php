@@ -14,7 +14,6 @@ class InAppNotification extends Model
         'body',
         'url',
         'data',
-        'read_at',
     ];
 
     protected function casts(): array
@@ -28,5 +27,10 @@ class InAppNotification extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function markAsRead(): void
+    {
+        $this->forceFill(['read_at' => now()])->save();
     }
 }

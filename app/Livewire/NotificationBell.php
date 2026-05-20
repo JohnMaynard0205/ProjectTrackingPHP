@@ -10,17 +10,20 @@ class NotificationBell extends Component
 {
     public function markRead(int $id): void
     {
-        InAppNotification::where('id', $id)
+        $notification = InAppNotification::where('id', $id)
             ->where('user_id', auth()->id())
             ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+            ->first();
+
+        $notification?->markAsRead();
     }
 
     public function markAllRead(): void
     {
         InAppNotification::where('user_id', auth()->id())
             ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+            ->get()
+            ->each->markAsRead();
     }
 
     public function render()
@@ -33,14 +36,15 @@ class NotificationBell extends Component
             ->get();
 
         $overdueTasks = $this->overdueTasks();
-        $unreadCount = InAppNotification::where('user_id', $user->id)
+        $unreadNotificationsCount = InAppNotification::where('user_id', $user->id)
             ->whereNull('read_at')
-            ->count() + $overdueTasks->count();
+            ->count();
+        $unreadCount = $unreadNotificationsCount + $this->overdueTasksCount();
 
-        return view('livewire.notification-bell', compact('notifications', 'overdueTasks', 'unreadCount'));
+        return view('livewire.notification-bell', compact('notifications', 'overdueTasks', 'unreadCount', 'unreadNotificationsCount'));
     }
 
-    private function overdueTasks()
+    private function overdueTasksQuery()
     {
         $today = now()->toDateString();
         $user = auth()->user();
@@ -59,6 +63,19 @@ class NotificationBell extends Component
             $query->whereHas('project', fn ($project) => $project->where('client_id', $user->id));
         }
 
-        return $query->orderBy('due_date')->limit(5)->get();
+        return $query;
+    }
+
+    private function overdueTasks()
+    {
+        return $this->overdueTasksQuery()
+            ->orderBy('due_date')
+            ->limit(5)
+            ->get();
+    }
+
+    private function overdueTasksCount(): int
+    {
+        return $this->overdueTasksQuery()->count();
     }
 }

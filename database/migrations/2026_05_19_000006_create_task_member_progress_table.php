@@ -24,21 +24,23 @@ return new class extends Migration
             });
         }
 
-        DB::table('task_assignees')
-            ->orderBy('id')
-            ->select(['id', 'task_id', 'user_id', 'created_at', 'updated_at'])
-            ->chunkById(500, function ($assignees) {
-                $rows = $assignees->map(fn ($assignee) => [
-                    'task_id' => $assignee->task_id,
-                    'user_id' => $assignee->user_id,
-                    'status' => 'pending',
-                    'progress' => 0,
-                    'created_at' => $assignee->created_at,
-                    'updated_at' => $assignee->updated_at,
-                ])->all();
+        if (Schema::hasTable('task_assignees')) {
+            DB::table('task_assignees')
+                ->orderBy('id')
+                ->select(['id', 'task_id', 'user_id', 'created_at', 'updated_at'])
+                ->chunkById(500, function ($assignees) {
+                    $rows = $assignees->map(fn ($assignee) => [
+                        'task_id' => $assignee->task_id,
+                        'user_id' => $assignee->user_id,
+                        'status' => 'pending',
+                        'progress' => 0,
+                        'created_at' => $assignee->created_at,
+                        'updated_at' => $assignee->updated_at,
+                    ])->all();
 
-                DB::table('task_member_progress')->insertOrIgnore($rows);
-            });
+                    DB::table('task_member_progress')->insertOrIgnore($rows);
+                });
+        }
     }
 
     public function down(): void

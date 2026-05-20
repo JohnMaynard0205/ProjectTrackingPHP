@@ -11,10 +11,10 @@ return new class extends Migration
         Schema::create('in_app_notifications', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('type');
+            $table->enum('type', ['task_assigned', 'task_completed', 'task_comment']);
             $table->string('title');
             $table->text('body')->nullable();
-            $table->string('url')->nullable();
+            $table->text('url')->nullable();
             $table->json('data')->nullable();
             $table->timestamp('read_at')->nullable();
             $table->timestamps();

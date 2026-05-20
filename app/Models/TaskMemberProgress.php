@@ -14,7 +14,6 @@ class TaskMemberProgress extends Model
         'user_id',
         'status',
         'progress',
-        'completed_at',
     ];
 
     protected function casts(): array

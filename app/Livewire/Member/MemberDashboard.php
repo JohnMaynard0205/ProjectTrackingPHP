@@ -79,7 +79,7 @@ class MemberDashboard extends Component
         }
 
         $oldStatus = $task->status;
-        $updates = ['status' => $newStatus];
+        $updates = [];
 
         // Capture the real start moment: first time a member moves task to in progress.
         if ($newStatus === 'in_progress' && !$task->start_date) {
@@ -87,7 +87,10 @@ class MemberDashboard extends Component
         }
 
         $this->updateMemberProgress($task, $newStatus);
-        $task->update($updates);
+        // Overall task status is derived from every assignee's progress below.
+        if ($updates !== []) {
+            $task->update($updates);
+        }
         $this->syncOverallTaskStatus($task->fresh(['memberProgress']));
         $this->recordStatusActivity($task, $oldStatus, $newStatus);
 
@@ -140,7 +143,7 @@ class MemberDashboard extends Component
 
     private function updateMemberProgress(Task $task, string $status): void
     {
-        TaskMemberProgress::updateOrCreate(
+        $progress = TaskMemberProgress::updateOrCreate(
             ['task_id' => $task->id, 'user_id' => auth()->id()],
             [
                 'status' => $status,
@@ -149,9 +152,11 @@ class MemberDashboard extends Component
                     'in_progress' => 50,
                     default => 0,
                 },
-                'completed_at' => $status === 'done' ? now() : null,
             ]
         );
+
+        $progress->completed_at = $status === 'done' ? now() : null;
+        $progress->save();
     }
 
     private function syncOverallTaskStatus(Task $task): void
@@ -164,7 +169,8 @@ class MemberDashboard extends Component
 
         $status = match (true) {
             $progress->every(fn ($item) => $item->status === 'done') => 'done',
-            $progress->contains(fn ($item) => $item->status === 'in_progress') => 'in_progress',
+            $progress->every(fn ($item) => $item->status === 'pending') => 'pending',
+            $progress->contains(fn ($item) => $item->status === 'in_progress' || $item->status === 'done') => 'in_progress',
             default => 'pending',
         };
 

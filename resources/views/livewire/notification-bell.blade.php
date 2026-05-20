@@ -1,6 +1,8 @@
 <div x-data="{ open: false }" class="relative" wire:poll.visible.20s>
     <button type="button"
             @click="open = ! open"
+            :aria-expanded="open.toString()"
+            aria-controls="notifications-panel"
             class="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
             aria-label="Notifications">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -16,13 +18,15 @@
     </button>
 
     <div x-cloak
+         id="notifications-panel"
          x-show="open"
+         :aria-hidden="(! open).toString()"
          @click.outside="open = false"
          x-transition
          class="absolute right-0 z-50 mt-2 w-96 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
         <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
             <h2 class="text-sm font-semibold text-gray-900">Notifications</h2>
-            @if($notifications->whereNull('read_at')->isNotEmpty())
+            @if($unreadNotificationsCount > 0)
                 <button type="button" wire:click="markAllRead" class="text-xs font-medium text-indigo-600 hover:text-indigo-800">
                     Mark all read
                 </button>

@@ -25,7 +25,7 @@ class LeadJournalReview extends Component
 
     public function render()
     {
-        $leadTeams = auth()->user()->ledTeams()->with(['project', 'members'])->get();
+        $leadTeams = auth()->user()->ledTeams()->with('project')->get();
         $teamIds = $leadTeams->pluck('id');
 
         $members = User::whereHas('teams', fn ($q) => $q->whereIn('teams.id', $teamIds))
@@ -36,17 +36,20 @@ class LeadJournalReview extends Component
             ->orderBy('title')
             ->get();
 
-        $logs = JournalLog::with(['user', 'task.project', 'task.team'])
+        $query = JournalLog::with(['user', 'task.project', 'task.team'])
             ->whereHas('task', fn ($q) => $q->whereIn('team_id', $teamIds))
             ->when($this->logDate, fn ($q) => $q->whereDate('log_date', $this->logDate))
             ->when($this->teamId !== '', fn ($q) => $q->whereHas('task', fn ($task) => $task->where('team_id', $this->teamId)))
             ->when($this->memberId !== '', fn ($q) => $q->where('user_id', $this->memberId))
-            ->when($this->taskId !== '', fn ($q) => $q->where('task_id', $this->taskId))
+            ->when($this->taskId !== '', fn ($q) => $q->where('task_id', $this->taskId));
+
+        $totalMinutes = (clone $query)->sum('minutes');
+
+        $logs = $query
             ->latest('log_date')
             ->latest()
+            ->limit(100)
             ->get();
-
-        $totalMinutes = $logs->sum('minutes');
 
         return view('livewire.lead.lead-journal-review', compact('leadTeams', 'members', 'tasks', 'logs', 'totalMinutes'));
     }

@@ -144,18 +144,18 @@ class LeadTaskManager extends Component
                 ->filter()
                 ->unique();
 
-            DB::transaction(function () use ($payload, $assigneeIds) {
+            DB::transaction(function () use ($payload, $assigneeIds, $oldDueDate, $previousAssigneeIds) {
                 $task = $this->ownedTask($this->editingId);
                 $task->update($payload);
                 $task->assignees()->sync($assigneeIds->all());
                 $this->syncMemberProgressRows($task, $assigneeIds);
-            });
 
-            $task = $this->ownedTask($this->editingId);
-            if ($oldDueDate !== $payload['due_date']) {
-                $this->recordActivity($task, 'due_date_changed', auth()->user()->name . ' changed due date from ' . ($oldDueDate ?: 'none') . ' to ' . $payload['due_date'] . '.');
-            }
-            $this->notifyAssignedMembers($task, $assigneeIds->diff($previousAssigneeIds));
+                if ($oldDueDate !== $payload['due_date']) {
+                    $this->recordActivity($task, 'due_date_changed', auth()->user()->name . ' changed due date from ' . ($oldDueDate ?: 'none') . ' to ' . $payload['due_date'] . '.');
+                }
+
+                $this->notifyAssignedMembers($task, $assigneeIds->diff($previousAssigneeIds));
+            });
             session()->flash('success', 'Task updated.');
         } else {
             DB::transaction(function () use ($payload, $assigneeIds) {
@@ -203,6 +203,10 @@ class LeadTaskManager extends Component
 
     public function updateStatus(int $id, string $status): void
     {
+        if (! in_array($status, ['pending', 'in_progress', 'done'], true)) {
+            return;
+        }
+
         $task = $this->ownedTask($id);
         $oldStatus = $task->status;
         $task->update(['status' => $status]);

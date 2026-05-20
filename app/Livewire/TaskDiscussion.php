@@ -6,6 +6,7 @@ use App\Models\InAppNotification;
 use App\Models\Task;
 use App\Models\TaskActivity;
 use App\Models\TaskComment;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 
 class TaskDiscussion extends Component
@@ -19,20 +20,22 @@ class TaskDiscussion extends Component
         $task = $this->authorizedTask();
         $data = $this->validate(['comment' => ['required', 'string', 'max:2000']]);
 
-        TaskComment::create([
-            'task_id' => $task->id,
-            'user_id' => auth()->id(),
-            'body' => $data['comment'],
-        ]);
+        DB::transaction(function () use ($task, $data) {
+            TaskComment::create([
+                'task_id' => $task->id,
+                'user_id' => auth()->id(),
+                'body' => $data['comment'],
+            ]);
 
-        TaskActivity::create([
-            'task_id' => $task->id,
-            'user_id' => auth()->id(),
-            'type' => 'comment',
-            'description' => auth()->user()->name . ' commented on the task.',
-        ]);
+            TaskActivity::create([
+                'task_id' => $task->id,
+                'user_id' => auth()->id(),
+                'type' => 'comment',
+                'description' => auth()->user()->name . ' commented on the task.',
+            ]);
 
-        $this->notifyComment($task);
+            $this->notifyComment($task);
+        });
         $this->comment = '';
     }
 
