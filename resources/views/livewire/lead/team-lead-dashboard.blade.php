@@ -191,6 +191,106 @@
     {{-- ── Row 2: Timeline + Team members ─────────────────────────────────── --}}
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
+        {{-- Timeline graph (takes 2/3) --}}
+        <div class="xl:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col min-h-[560px]">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <button wire:click="previousMonth"
+                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition"
+                        aria-label="Previous month">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+
+                <div class="flex items-center gap-3">
+                    <h3 class="text-base font-semibold text-gray-800">{{ $monthLabel }}</h3>
+                    <button wire:click="goToToday"
+                            class="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition">
+                        Today
+                    </button>
+                </div>
+
+                <button wire:click="nextMonth"
+                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition"
+                        aria-label="Next month">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="px-6 pt-5">
+                <h3 class="text-sm font-semibold text-gray-800">Project Timeline</h3>
+            </div>
+
+            <div class="flex-1 px-4 py-5">
+                @if($timelineGraph['rows']->isEmpty())
+                    <div class="py-16 text-center text-sm text-gray-400">
+                        No project, task, or member dates in this month.
+                    </div>
+                @else
+                    <div class="h-full w-full">
+                        <div class="border-b border-gray-100 pb-4">
+                            <div class="grid h-10"
+                                 style="grid-template-columns: repeat({{ $timelineGraph['totalDays'] }}, minmax(0, 1fr));">
+                                @foreach($timelineGraph['ticks'] as $tick)
+                                    <div class="text-center text-[10px] leading-tight {{ $tick['major'] ? 'font-semibold text-gray-700' : 'font-medium text-gray-400' }}">
+                                        <span class="block">{{ $tick['day'] }}</span>
+                                        <span class="block">{{ substr($tick['weekday'], 0, 1) }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="divide-y divide-gray-100">
+                            @foreach($timelineGraph['rows'] as $row)
+                                @php
+                                    $barClass = match($row['kind']) {
+                                        'project' => 'bg-indigo-600 border-indigo-700',
+                                        'task' => 'bg-amber-500 border-amber-600',
+                                        'member' => 'bg-sky-500 border-sky-600',
+                                        default => 'bg-gray-400 border-gray-500',
+                                    };
+                                @endphp
+                                <div class="py-3">
+                                    <div class="grid h-10 rounded-lg bg-gray-50 ring-1 ring-gray-100 overflow-hidden"
+                                         style="grid-template-columns: repeat({{ $timelineGraph['totalDays'] }}, minmax(0, 1fr)); grid-template-rows: 1fr;">
+                                        @foreach($timelineGraph['ticks'] as $tick)
+                                            <div class="border-r {{ $tick['major'] ? 'border-gray-300' : 'border-gray-200/60' }}"
+                                                 style="grid-column: {{ $tick['day'] }}; grid-row: 1;"></div>
+                                        @endforeach
+
+                                        <div class="z-10 self-center h-8 rounded-md border px-3 text-xs font-semibold leading-8 text-white shadow-sm truncate {{ $barClass }}"
+                                             style="grid-column: {{ $row['startDay'] }} / span {{ $row['span'] }}; grid-row: 1;"
+                                             title="{{ $row['title'] }} ({{ $row['dateRange'] }})">
+                                            {{ $row['title'] }}
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-6 py-4 border-t border-gray-100 bg-gray-50 text-xs text-gray-500">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-4 h-3 rounded bg-indigo-600"></span> Project timeline
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-4 h-3 rounded bg-amber-500"></span> Task
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-4 h-3 rounded bg-sky-500"></span> Member
+                </span>
+            </div>
+        </div>
+
+        {{-- Legacy event timeline UI is intentionally parked while the graph-based Project Timeline is active.
+             It still references $events, $memberStartActivities, and event CRUD methods such as
+             openCreateEvent/openEditEvent; restore this block only if the lead dashboard needs the
+             editable event-list timeline instead of the current graph. --}}
+        @if(false)
         {{-- Timeline (takes 2/3) --}}
         <div class="xl:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -416,6 +516,8 @@
                 @endif
             @endif
         </div>
+
+        @endif
 
         {{-- Team members sidebar --}}
         <div class="space-y-4">

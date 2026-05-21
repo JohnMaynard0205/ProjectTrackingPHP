@@ -2,8 +2,11 @@
 
 namespace App\Livewire\Lead;
 
+use App\Models\Project;
 use App\Models\ProjectEvent;
 use App\Models\Team;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -13,6 +16,10 @@ use Livewire\Component;
 class TeamLeadDashboard extends Component
 {
     public ?int $selectedTeamId = null;
+
+    public int $month = 1;
+
+    public int $year = 1970;
 
     // ── Event form state ──────────────────────────────────────────────────────
     public bool $showEventForm = false;
@@ -33,6 +40,9 @@ class TeamLeadDashboard extends Component
 
     public function mount(): void
     {
+        $this->month = now()->month;
+        $this->year = now()->year;
+
         $first = auth()->user()->ledTeams()->first();
         if ($first) {
             $this->selectedTeamId = $first->id;
@@ -48,6 +58,26 @@ class TeamLeadDashboard extends Component
         $this->selectedTeamId = $id;
         $this->cancelEventForm();
         $this->closeMemberTasksModal();
+    }
+
+    public function previousMonth(): void
+    {
+        $date = Carbon::create($this->year, $this->month, 1)->subMonth();
+        $this->month = $date->month;
+        $this->year = $date->year;
+    }
+
+    public function nextMonth(): void
+    {
+        $date = Carbon::create($this->year, $this->month, 1)->addMonth();
+        $this->month = $date->month;
+        $this->year = $date->year;
+    }
+
+    public function goToToday(): void
+    {
+        $this->month = now()->month;
+        $this->year = now()->year;
     }
 
     // ── Member tasks modal ─────────────────────────────────────────────────────
@@ -214,6 +244,268 @@ class TeamLeadDashboard extends Component
         return auth()->user()->ledTeams()->findOrFail($this->selectedTeamId)->project;
     }
 
+    /**
+     * Build calendar items for the selected team's month: project events plus team task start/due dates.
+     *
+     * @return Collection<int, Collection<int, array<string, mixed>>>
+     */
+    private function calendarItemsByDay(
+        Project $project,
+        Collection $tasks,
+        Carbon $monthStart,
+        Carbon $monthEnd,
+    ): Collection {
+        $byDay = collect();
+
+        $monthEvents = $project->events()
+            ->whereBetween('event_date', [$monthStart, $monthEnd])
+            ->orderBy('event_date')
+            ->get();
+
+        foreach ($monthEvents as $event) {
+            $day = $event->event_date->day;
+            $byDay[$day] = ($byDay[$day] ?? collect())->push([
+                'kind' => 'event',
+                'title' => $event->title,
+                'type' => $event->type,
+            ]);
+        }
+
+        $tasks->each(function ($task) use ($byDay, $monthStart, $monthEnd) {
+            $dueInMonth = $task->due_date
+                && $task->due_date->gte($monthStart)
+                && $task->due_date->lte($monthEnd);
+            $startInMonth = $task->start_date
+                && $task->start_date->gte($monthStart)
+                && $task->start_date->lte($monthEnd);
+
+            $sameDay = $dueInMonth && $startInMonth
+                && $task->due_date->isSameDay($task->start_date);
+
+            if ($dueInMonth) {
+                $day = $task->due_date->day;
+                $byDay[$day] = ($byDay[$day] ?? collect())->push([
+                    'kind' => 'task',
+                    'title' => $sameDay ? $task->title : $task->title.' (due)',
+                    'variant' => 'task_due',
+                    'status' => $task->status,
+                ]);
+            }
+
+            if ($startInMonth && ! $sameDay) {
+                $day = $task->start_date->day;
+                $byDay[$day] = ($byDay[$day] ?? collect())->push([
+                    'kind' => 'task',
+                    'title' => $task->title.' (start)',
+                    'variant' => 'task_start',
+                    'status' => $task->status,
+                ]);
+            }
+        });
+
+        return $byDay->map(fn (Collection $items) => $items->values());
+    }
+
+    private function buildCalendarGrid(Collection $itemsByDay): array
+    {
+        $firstDay = Carbon::create($this->year, $this->month, 1);
+        $daysInMonth = $firstDay->daysInMonth;
+        $startOffset = $firstDay->dayOfWeek;
+
+        $grid = [];
+        $day = 1;
+
+        for ($row = 0; $row < 6; $row++) {
+            $week = [];
+
+            for ($col = 0; $col < 7; $col++) {
+                $cellIndex = $row * 7 + $col;
+
+                if ($cellIndex < $startOffset || $day > $daysInMonth) {
+                    $week[] = null;
+                } else {
+                    $week[] = [
+                        'day' => $day,
+                        'date' => Carbon::create($this->year, $this->month, $day)->toDateString(),
+                        'today' => now()->year === $this->year
+                            && now()->month === $this->month
+                            && now()->day === $day,
+                        'items' => $itemsByDay->get($day, collect()),
+                    ];
+                    $day++;
+                }
+            }
+
+            if (collect($week)->filter()->isNotEmpty()) {
+                $grid[] = $week;
+            }
+        }
+
+        return $grid;
+    }
+
+    private function buildCalendarWeekBars(Project $project, Collection $tasks, array $calendarGrid): array
+    {
+        $ranges = collect([
+            [
+                'kind' => 'project',
+                'title' => 'Project timeline',
+                'start' => $project->start_date,
+                'end' => $project->end_date,
+            ],
+        ]);
+
+        $tasks
+            ->filter(fn ($task) => $task->start_date || $task->due_date)
+            ->sortBy(fn ($task) => optional($task->start_date ?? $task->due_date)->timestamp ?? PHP_INT_MAX)
+            ->each(function ($task) use ($ranges) {
+                $start = $task->start_date ?? $task->due_date;
+                $end = $task->due_date ?? $task->start_date;
+
+                $ranges->push([
+                    'kind' => 'task',
+                    'title' => $task->title,
+                    'start' => $start,
+                    'end' => $end->lt($start) ? $start : $end,
+                ]);
+
+                $assigneeNames = $task->assignees->pluck('name');
+
+                if ($assigneeNames->isEmpty() && $task->assignee) {
+                    $assigneeNames = collect([$task->assignee->name]);
+                }
+
+                if ($assigneeNames->isNotEmpty()) {
+                    $ranges->push([
+                        'kind' => 'member',
+                        'title' => $assigneeNames->take(2)->join(', '),
+                        'start' => $start,
+                        'end' => $end->lt($start) ? $start : $end,
+                    ]);
+                }
+            });
+
+        return collect($calendarGrid)
+            ->map(function (array $week) use ($ranges) {
+                $realCells = collect($week)->filter();
+
+                if ($realCells->isEmpty()) {
+                    return [];
+                }
+
+                $weekStart = Carbon::parse($realCells->first()['date'])->startOfDay();
+                $weekEnd = Carbon::parse($realCells->last()['date'])->endOfDay();
+
+                return $ranges
+                    ->filter(fn ($range) => $range['start'] && $range['end'])
+                    ->filter(fn ($range) => $range['start']->lte($weekEnd) && $range['end']->gte($weekStart))
+                    ->groupBy('kind')
+                    ->flatMap(function (Collection $items, string $kind) {
+                        return $kind === 'project' ? $items->take(1) : $items->take(3);
+                    })
+                    ->map(function (array $range) use ($weekStart, $weekEnd) {
+                        $start = $range['start']->copy()->max($weekStart);
+                        $end = $range['end']->copy()->min($weekEnd);
+
+                        return [
+                            'kind' => $range['kind'],
+                            'title' => $range['title'],
+                            'startColumn' => $start->dayOfWeek + 1,
+                            'span' => max(1, $end->dayOfWeek - $start->dayOfWeek + 1),
+                        ];
+                    })
+                    ->values()
+                    ->all();
+            })
+            ->all();
+    }
+
+    private function buildTimelineGraph(Project $project, Collection $tasks, Carbon $monthStart, Carbon $monthEnd): array
+    {
+        $totalDays = max(1, (int) $monthStart->diffInDays($monthEnd) + 1);
+
+        $makeRow = function (
+            string $kind,
+            string $label,
+            string $title,
+            Carbon $start,
+            Carbon $end,
+        ) use ($monthStart, $monthEnd, $totalDays): ?array {
+            if ($end->lt($start)) {
+                [$start, $end] = [$end, $start];
+            }
+
+            if ($end->lt($monthStart) || $start->gt($monthEnd)) {
+                return null;
+            }
+
+            $visibleStart = $start->copy()->max($monthStart);
+            $visibleEnd = $end->copy()->min($monthEnd);
+            $span = (int) $visibleStart->diffInDays($visibleEnd) + 1;
+
+            return [
+                'kind' => $kind,
+                'label' => $label,
+                'title' => $title,
+                'dateRange' => $start->format('M d').' - '.$end->format('M d'),
+                'startDay' => $visibleStart->day,
+                'span' => max(1, $span),
+                'left' => round(($monthStart->diffInDays($visibleStart) / $totalDays) * 100, 2),
+                'width' => max(2.5, round(($span / $totalDays) * 100, 2)),
+            ];
+        };
+
+        $rows = collect([
+            $makeRow('project', 'Project', $project->name, $project->start_date, $project->end_date),
+        ])->filter();
+
+        $tasks
+            ->filter(fn ($task) => $task->start_date || $task->due_date)
+            ->sortBy(fn ($task) => optional($task->start_date ?? $task->due_date)->timestamp ?? PHP_INT_MAX)
+            ->each(function ($task) use ($rows, $makeRow) {
+                $start = $task->start_date ?? $task->due_date;
+                $end = $task->due_date ?? $task->start_date;
+
+                $taskRow = $makeRow('task', 'Task', $task->title, $start, $end);
+
+                if ($taskRow) {
+                    $rows->push($taskRow);
+                }
+
+                $assigneeNames = $task->assignees->pluck('name');
+
+                if ($assigneeNames->isEmpty() && $task->assignee) {
+                    $assigneeNames = collect([$task->assignee->name]);
+                }
+
+                if ($assigneeNames->isNotEmpty()) {
+                    $memberRow = $makeRow('member', 'Member', $assigneeNames->join(', '), $start, $end);
+
+                    if ($memberRow) {
+                        $rows->push($memberRow);
+                    }
+                }
+            });
+
+        $tickDays = collect(range(1, $monthEnd->day))
+            ->map(function (int $day) use ($monthStart, $totalDays) {
+                $date = $monthStart->copy()->day($day);
+
+                return [
+                    'day' => $day,
+                    'weekday' => $date->format('D'),
+                    'left' => round((($day - 1) / $totalDays) * 100, 2),
+                    'major' => $day === 1 || $date->isMonday(),
+                ];
+            });
+
+        return [
+            'rows' => $rows->values(),
+            'ticks' => $tickDays,
+            'totalDays' => $totalDays,
+        ];
+    }
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     public function render()
@@ -232,6 +524,14 @@ class TeamLeadDashboard extends Component
         $events = collect();
         $daysRemaining = null;
         $progressPct = 0;
+        $calendarGrid = [];
+        $calendarWeekBars = [];
+        $timelineGraph = [
+            'rows' => collect(),
+            'ticks' => collect(),
+            'totalDays' => 30,
+        ];
+        $monthLabel = Carbon::create($this->year, $this->month, 1)->format('F Y');
 
         if ($this->selectedTeamId) {
             $selectedTeam = auth()->user()->ledTeams()->with([
@@ -244,6 +544,13 @@ class TeamLeadDashboard extends Component
             if ($selectedTeam) {
                 $project = $selectedTeam->project;
                 $tasks = $selectedTeam->tasks;
+                $monthStart = Carbon::create($this->year, $this->month, 1)->startOfDay();
+                $monthEnd = $monthStart->copy()->endOfMonth();
+                $calendarGrid = $this->buildCalendarGrid(
+                    $this->calendarItemsByDay($project, $tasks, $monthStart, $monthEnd)
+                );
+                $calendarWeekBars = $this->buildCalendarWeekBars($project, $tasks, $calendarGrid);
+                $timelineGraph = $this->buildTimelineGraph($project, $tasks, $monthStart, $monthEnd);
 
                 $total = $tasks->count();
                 $done = $tasks->where('status', 'done')->count();
@@ -310,7 +617,7 @@ class TeamLeadDashboard extends Component
         return view('livewire.lead.team-lead-dashboard', compact(
             'teams', 'selectedTeam', 'project', 'stats',
             'tasksByPriority', 'memberTasksMap', 'memberStartActivities', 'events', 'daysRemaining', 'progressPct',
-            'modalMember', 'modalMemberTasks',
+            'modalMember', 'modalMemberTasks', 'calendarGrid', 'calendarWeekBars', 'timelineGraph', 'monthLabel',
         ));
     }
 }
