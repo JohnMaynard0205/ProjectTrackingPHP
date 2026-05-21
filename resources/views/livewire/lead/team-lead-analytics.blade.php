@@ -30,14 +30,6 @@
                 <p class="text-sm">No tasks yet for this team — analytics will populate once tasks exist.</p>
             </div>
         @else
-            <div class="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-xs text-amber-900 leading-relaxed">
-                <strong>Note:</strong> Historical charts approximate past board states using task timestamps
-                (<code class="bg-amber-100/80 px-1 rounded">created_at</code>,
-                <code class="bg-amber-100/80 px-1 rounded">start_date</code>,
-                <code class="bg-amber-100/80 px-1 rounded">updated_at</code>).
-                Tasks in <strong>Review</strong> use the Review status whenever your team applies it from task management or the member board.
-            </div>
-
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                 {{-- Burndown --}}
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
