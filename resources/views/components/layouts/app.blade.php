@@ -80,7 +80,8 @@
                         </svg>
                         My Projects
                     </a>
-                @elseif(auth()->user()->isTeamLead())
+                @else
+                    @if(auth()->user()->isTeamLead())
                     <p class="px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Team Lead</p>
                     <a href="{{ route('lead.dashboard') }}"
                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition
@@ -118,7 +119,9 @@
                         </svg>
                         Journal Review
                     </a>
-                @elseif(auth()->user()->isMember())
+                    @endif
+
+                    @if(auth()->user()->isMember())
                     <p class="px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">Member</p>
                     <a href="{{ route('member.dashboard') }}"
                        class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition
@@ -138,6 +141,7 @@
                         </svg>
                         Logs and Journal
                     </a>
+                    @endif
                 @endif
             @endauth
         </nav>
@@ -145,13 +149,42 @@
         {{-- User info --}}
         @auth
         <div class="px-4 py-4 border-t border-gray-700">
+            @php
+                $activeRoleLabel = match (true) {
+                    request()->routeIs('admin.*') => 'Admin',
+                    request()->routeIs('client.*') => 'Client',
+                    request()->routeIs('lead.*') => 'Team Lead',
+                    request()->routeIs('member.*') => 'Member',
+                    default => null,
+                };
+
+                $contextRoles = collect();
+
+                if (auth()->user()->isAdmin()) {
+                    $contextRoles->push('Admin');
+                }
+
+                if (auth()->user()->isClient()) {
+                    $contextRoles->push('Client');
+                }
+
+                if (auth()->user()->isTeamLead()) {
+                    $contextRoles->push('Team Lead');
+                }
+
+                if (auth()->user()->isMember()) {
+                    $contextRoles->push('Member');
+                }
+
+                $roleLabel = $activeRoleLabel ?? ($contextRoles->join(' / ') ?: auth()->user()->roleName());
+            @endphp
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-sm font-semibold">
                     {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
                 </div>
                 <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-white truncate">{{ auth()->user()->name }}</p>
-                    <p class="text-xs text-gray-400 capitalize">{{ str_replace('_', ' ', auth()->user()->role) }}</p>
+                    <p class="text-xs text-gray-400">{{ $roleLabel }}</p>
                 </div>
             </div>
             <form method="POST" action="{{ route('logout') }}" class="mt-3">

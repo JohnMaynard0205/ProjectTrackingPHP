@@ -18,6 +18,7 @@ class TeamManager extends Component
     public string $name      = '';
     public ?int   $projectId = null;
     public ?int   $leadId    = null;
+    public array  $memberIds = [];
     public array $projectTeamIds = [];
     public string $teamSearch = '';
 
@@ -34,6 +35,8 @@ class TeamManager extends Component
             'name'      => 'required|string|max:255',
             'projectId' => 'required|exists:projects,id',
             'leadId'    => 'required|exists:users,id',
+            'memberIds' => 'nullable|array',
+            'memberIds.*' => 'integer|exists:users,id',
             'projectTeamIds' => 'nullable|array',
             'projectTeamIds.*' => 'integer|exists:teams,id',
         ];
@@ -54,6 +57,7 @@ class TeamManager extends Component
         $this->name      = $team->name;
         $this->projectId = $team->project_id;
         $this->leadId    = $team->lead_id;
+        $this->memberIds = $team->regularMembers()->pluck('users.id')->map(fn ($id) => (int) $id)->all();
         $this->loadProjectTeamSelection();
         $this->showForm  = true;
     }
@@ -89,6 +93,8 @@ class TeamManager extends Component
             ->values();
 
         Team::whereIn('id', $projectTeamIds->all())->update(['project_id' => $team->project_id]);
+
+        $this->syncTeamPeople($team, (int) $data['leadId'], $data['memberIds'] ?? []);
 
         $this->resetForm();
         $this->showForm = false;
@@ -155,6 +161,7 @@ class TeamManager extends Component
         $this->name           = '';
         $this->projectId      = null;
         $this->leadId         = null;
+        $this->memberIds      = [];
         $this->projectTeamIds = [];
         $this->teamSearch     = '';
         $this->editingId      = null;
@@ -186,11 +193,30 @@ class TeamManager extends Component
             ->get();
     }
 
+    private function syncTeamPeople(Team $team, int $leadId, array $memberIds): void
+    {
+        $sync = [
+            $leadId => ['role' => 'lead'],
+        ];
+
+        collect($memberIds)
+            ->map(fn ($id) => (int) $id)
+            ->reject(fn ($id) => $id === $leadId)
+            ->unique()
+            ->each(function (int $memberId) use (&$sync): void {
+                $sync[$memberId] = ['role' => 'member'];
+            });
+
+        $team->members()->sync($sync);
+    }
+
     public function render()
     {
         $teams    = Team::with(['project', 'lead', 'members'])->withCount('tasks')->latest()->get();
         $projects = Project::orderBy('name')->get();
-        $leads    = User::where('role', 'team_lead')->orderBy('name')->get();
+        $people   = User::whereIn('role', ['team_lead', 'member'])->orderBy('name')->get();
+        $leads    = $people;
+        $members  = $people;
         $projectTeamOptions = $this->projectTeamOptions();
         $selectedProjectTeams = Team::with(['project', 'lead'])
             ->whereIn('id', array_map('intval', $this->projectTeamIds))
@@ -211,6 +237,6 @@ class TeamManager extends Component
         }
 
         return view('livewire.admin.team-manager',
-            compact('teams', 'projects', 'leads', 'projectTeamOptions', 'selectedProjectTeams', 'detailsTeam'));
+            compact('teams', 'projects', 'leads', 'members', 'projectTeamOptions', 'selectedProjectTeams', 'detailsTeam'));
     }
 }

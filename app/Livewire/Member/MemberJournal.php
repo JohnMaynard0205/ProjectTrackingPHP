@@ -21,6 +21,9 @@ class MemberJournal extends Component
     #[Url(as: 'date')]
     public string $logDate = '';
 
+    #[Url(as: 'team')]
+    public int $filterTeam = 0;
+
     public string $selectedTaskId = '';
 
     public int $hours = 0;
@@ -45,6 +48,12 @@ class MemberJournal extends Component
         $this->normalizeLogDate();
     }
 
+    public function updatedFilterTeam(): void
+    {
+        $this->filterTeam = max(0, (int) $this->filterTeam);
+        $this->selectedTaskId = '';
+    }
+
     public function addTimerMinutes($seconds): void
     {
         $seconds = $this->clampTimerSeconds($seconds);
@@ -65,6 +74,11 @@ class MemberJournal extends Component
 
         if (! blank($validated['selectedTaskId'] ?? null) && ! $this->memberTaskExists((int) $validated['selectedTaskId'])) {
             $this->addError('selectedTaskId', 'Choose one of your assigned tasks.');
+            return;
+        }
+
+        if ($this->filterTeam > 0 && blank($validated['selectedTaskId'] ?? null)) {
+            $this->addError('selectedTaskId', 'Choose a task from the selected team.');
             return;
         }
 
@@ -97,6 +111,11 @@ class MemberJournal extends Component
 
         if (! blank($validated['selectedTaskId'] ?? null) && ! $this->memberTaskExists((int) $validated['selectedTaskId'])) {
             $this->addError('selectedTaskId', 'Choose one of your assigned tasks.');
+            return;
+        }
+
+        if ($this->filterTeam > 0 && blank($validated['selectedTaskId'] ?? null)) {
+            $this->addError('selectedTaskId', 'Choose a task from the selected team.');
             return;
         }
 
@@ -204,6 +223,7 @@ class MemberJournal extends Component
             ->where(fn ($q) => $q
                 ->where('assigned_to', $userId)
                 ->orWhereHas('assignees', fn ($assignees) => $assignees->whereKey($userId)))
+            ->when($this->filterTeam > 0, fn ($q) => $q->where('team_id', $this->filterTeam))
             ->exists();
     }
 
@@ -213,30 +233,43 @@ class MemberJournal extends Component
 
         $userId = auth()->id();
 
-        $tasks = Task::with('project')
+        $teams = auth()->user()
+            ->memberTeams()
+            ->with('project')
+            ->orderBy('name')
+            ->get();
+
+        if ($this->filterTeam > 0 && ! $teams->contains('id', $this->filterTeam)) {
+            $this->filterTeam = 0;
+        }
+
+        $tasks = Task::with(['project', 'team'])
             ->where(fn ($q) => $q
                 ->where('assigned_to', $userId)
                 ->orWhereHas('assignees', fn ($assignees) => $assignees->whereKey($userId)))
+            ->when($this->filterTeam > 0, fn ($q) => $q->where('team_id', $this->filterTeam))
             ->where('status', 'in_progress')
             ->orderBy('title')
             ->get();
 
-        $logs = JournalLog::with(['task.project'])
+        $logs = JournalLog::with(['task.project', 'task.team'])
             ->where('user_id', $userId)
             ->whereDate('log_date', $this->logDate)
+            ->when($this->filterTeam > 0, fn ($q) => $q->whereHas('task', fn ($task) => $task->where('team_id', $this->filterTeam)))
             ->latest()
             ->get();
 
         $dailyMinutes = $logs->sum('minutes');
 
-        $recentLogs = JournalLog::with(['task.project'])
+        $recentLogs = JournalLog::with(['task.project', 'task.team'])
             ->where('user_id', $userId)
             ->whereDate('log_date', '!=', $this->logDate)
+            ->when($this->filterTeam > 0, fn ($q) => $q->whereHas('task', fn ($task) => $task->where('team_id', $this->filterTeam)))
             ->latest('log_date')
             ->latest()
             ->limit(8)
             ->get();
 
-        return view('livewire.member.member-journal', compact('tasks', 'logs', 'dailyMinutes', 'recentLogs'));
+        return view('livewire.member.member-journal', compact('tasks', 'logs', 'dailyMinutes', 'recentLogs', 'teams'));
     }
 }
