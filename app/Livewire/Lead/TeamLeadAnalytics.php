@@ -187,7 +187,7 @@ class TeamLeadAnalytics extends Component
         ];
     }
 
-    /** @return array{labels:string[],datasets:array<int, array<string, mixed>>,includesGeneral:bool}|null */
+    /** @return array{labels:string[],datasets:array<int, array<string, mixed>>,includesGeneral:bool,generalMinutes:int,taskMinutes:int,totalMinutes:int}|null */
     private function buildVelocityDataset(Collection $members, Collection $tasks, int $days, bool $includeGeneralWork, int $teamId): ?array
     {
         $taskIds = $tasks->pluck('id');
@@ -204,7 +204,12 @@ class TeamLeadAnalytics extends Component
             ->map(fn (Carbon $date) => $date->format('M j'))
             ->values();
 
-        $logs = JournalLog::query()
+        $memberIdsWithOnlySelectedTeam = $members
+            ->filter(fn ($member) => $member->memberTeams()->count() === 1
+                && $member->memberTeams()->whereKey($teamId)->exists())
+            ->pluck('id');
+
+        $rawLogs = JournalLog::query()
             ->whereIn('user_id', $members->pluck('id'))
             ->where(function ($query) use ($taskIds, $includeGeneralWork, $teamId) {
                 if ($taskIds->isNotEmpty()) {
@@ -214,22 +219,55 @@ class TeamLeadAnalytics extends Component
                 if ($includeGeneralWork) {
                     $query->{$taskIds->isNotEmpty() ? 'orWhere' : 'where'}(function ($general) use ($teamId) {
                         $general->whereNull('task_id')
-                            ->where('team_id', $teamId);
+                            ->where(function ($teamScope) use ($teamId) {
+                                $teamScope->where('team_id', $teamId)
+                                    ->orWhereNull('team_id');
+                            });
                     });
                 }
             })
             ->whereBetween('log_date', [$start->toDateString(), $end->toDateString()])
-            ->get()
-            ->groupBy(fn (JournalLog $log) => $log->user_id.'|'.$log->log_date->format('M j'));
+            ->get();
+
+        $selectedTeamTaskDayKeys = $rawLogs
+            ->filter(fn (JournalLog $log) => $log->task_id && $taskIds->contains($log->task_id))
+            ->map(fn (JournalLog $log) => $log->user_id.'|'.$log->log_date->toDateString())
+            ->unique();
+
+        $logs = $rawLogs
+            ->filter(function (JournalLog $log) use ($taskIds, $teamId, $memberIdsWithOnlySelectedTeam, $selectedTeamTaskDayKeys): bool {
+                if ($log->task_id) {
+                    return $taskIds->contains($log->task_id);
+                }
+
+                if ((int) $log->team_id === $teamId) {
+                    return true;
+                }
+
+                if ($log->team_id !== null) {
+                    return false;
+                }
+
+                $dayKey = $log->user_id.'|'.$log->log_date->toDateString();
+
+                return $memberIdsWithOnlySelectedTeam->contains($log->user_id)
+                    || $selectedTeamTaskDayKeys->contains($dayKey);
+            })
+            ->values();
+
+        $generalMinutes = $logs->whereNull('task_id')->sum('minutes');
+        $totalMinutes = $logs->sum('minutes');
+        $taskMinutes = max(0, $totalMinutes - $generalMinutes);
+        $logsByMemberAndDay = $logs->groupBy(fn (JournalLog $log) => $log->user_id.'|'.$log->log_date->format('M j'));
 
         $colors = ['#2563eb', '#059669', '#f59e0b', '#e11d48', '#7c3aed', '#0891b2', '#4b5563'];
 
         $datasets = $members->values()
-            ->map(function ($member, int $index) use ($labels, $logs, $colors) {
+            ->map(function ($member, int $index) use ($labels, $logsByMemberAndDay, $colors) {
                 return [
                     'label' => $member->name,
                     'data' => $labels
-                        ->map(fn (string $label) => round(($logs->get($member->id.'|'.$label, collect())->sum('minutes') / 60), 2))
+                        ->map(fn (string $label) => round(($logsByMemberAndDay->get($member->id.'|'.$label, collect())->sum('minutes') / 60), 2))
                         ->all(),
                     'backgroundColor' => $colors[$index % count($colors)],
                     'borderRadius' => 6,
@@ -248,6 +286,9 @@ class TeamLeadAnalytics extends Component
             'labels' => $labels->all(),
             'datasets' => $datasets,
             'includesGeneral' => $includeGeneralWork,
+            'generalMinutes' => $generalMinutes,
+            'taskMinutes' => $taskMinutes,
+            'totalMinutes' => $totalMinutes,
         ];
     }
 

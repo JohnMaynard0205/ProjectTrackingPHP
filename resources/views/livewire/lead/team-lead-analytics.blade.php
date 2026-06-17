@@ -116,6 +116,28 @@
                             </select>
                         </div>
                     </div>
+                    @if($velocity)
+                        <div class="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            <div class="rounded-lg bg-gray-50 px-3 py-2">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Total</p>
+                                <p class="mt-1 text-sm font-bold text-gray-900">
+                                    {{ intdiv($velocity['totalMinutes'], 60) }}h {{ $velocity['totalMinutes'] % 60 }}m
+                                </p>
+                            </div>
+                            <div class="rounded-lg bg-blue-50 px-3 py-2">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-blue-500">Task work</p>
+                                <p class="mt-1 text-sm font-bold text-blue-900">
+                                    {{ intdiv($velocity['taskMinutes'], 60) }}h {{ $velocity['taskMinutes'] % 60 }}m
+                                </p>
+                            </div>
+                            <div class="rounded-lg bg-indigo-50 px-3 py-2">
+                                <p class="text-[11px] font-semibold uppercase tracking-wide text-indigo-500">General work</p>
+                                <p class="mt-1 text-sm font-bold text-indigo-900">
+                                    {{ intdiv($velocity['generalMinutes'], 60) }}h {{ $velocity['generalMinutes'] % 60 }}m
+                                </p>
+                            </div>
+                        </div>
+                    @endif
                     <div class="relative h-64">
                         @if($velocity)
                             <canvas id="chart-velocity-lead-{{ $selectedTeamId }}"></canvas>
