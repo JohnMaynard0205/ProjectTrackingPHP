@@ -10,6 +10,7 @@
         'project' => 'bg-indigo-600 border-indigo-700',
         'task' => 'bg-amber-500 border-amber-600',
         'actual' => 'bg-emerald-500 border-emerald-600',
+        'general' => 'bg-emerald-500 border-emerald-600',
         default => 'bg-gray-400 border-gray-500',
     };
 @endphp
@@ -75,6 +76,15 @@
         @endunless
 
         @foreach(($row['segments'] ?? collect()) as $segment)
+            @php
+                $segmentClass = match($segment['kind'] ?? null) {
+                    'project' => 'bg-indigo-600 border-indigo-700',
+                    'task' => 'bg-amber-500 border-amber-600',
+                    'actual' => 'bg-emerald-500 border-emerald-600',
+                    'general' => 'bg-emerald-500 border-emerald-600',
+                    default => 'bg-gray-400 border-gray-500',
+                };
+            @endphp
             <div x-data="{
                     open: false,
                     x: 0,
@@ -91,13 +101,13 @@
                  @mouseleave="open = false"
                  @focus="open = true; $nextTick(() => { const rect = $el.getBoundingClientRect(); place({ clientX: rect.left, clientY: rect.bottom }) })"
                  @blur="open = false"
-                 class="relative z-30 mb-1 self-end h-5 rounded-md border border-emerald-700 bg-emerald-500 px-2 text-[10px] font-semibold leading-5 text-white shadow-sm outline-none"
+                 class="relative z-30 mb-1 self-end h-5 rounded-md border px-2 text-[10px] font-semibold leading-5 text-white shadow-sm outline-none {{ $segmentClass }}"
                  style="grid-column: {{ $segment['startDay'] }} / span {{ $segment['span'] }}; grid-row: 1;"
                  tabindex="0"
                  aria-label="{{ $segment['tooltip'] }}">
                 <div class="flex min-w-0 items-center gap-1.5 truncate">
                     <span class="rounded bg-white/20 px-1.5 py-0.5 text-[8px] uppercase tracking-wide leading-none">
-                        Start to End
+                        {{ $segment['label'] }}
                     </span>
                     <span class="truncate">{{ $segment['title'] }}</span>
                 </div>
