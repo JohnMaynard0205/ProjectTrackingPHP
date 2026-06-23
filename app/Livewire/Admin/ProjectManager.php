@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Models\Team;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -83,38 +84,38 @@ class ProjectManager extends Component
             'client_id'   => $data['clientId'],
         ];
 
-        if ($this->editingId) {
-            $project = Project::findOrFail($this->editingId);
-            $project->update($payload);
-            $selectedTeamIds = collect($this->projectTeamIds)
-                ->map(fn ($id) => (int) $id)
-                ->filter()
-                ->unique()
-                ->values();
+        $selectedTeamIds = collect($this->projectTeamIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
 
-            Team::where('project_id', $project->id)
-                ->when($selectedTeamIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $selectedTeamIds))
-                ->update(['project_id' => null]);
+        DB::transaction(function () use ($payload, $selectedTeamIds) {
+            if ($this->editingId) {
+                $project = Project::findOrFail($this->editingId);
+                $project->update($payload);
 
-            if ($selectedTeamIds->isNotEmpty()) {
-                Team::whereIn('id', $selectedTeamIds->all())
-                    ->update(['project_id' => $project->id]);
+                Team::where('project_id', $project->id)
+                    ->when($selectedTeamIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $selectedTeamIds))
+                    ->update(['project_id' => null]);
+
+                if ($selectedTeamIds->isNotEmpty()) {
+                    Team::whereIn('id', $selectedTeamIds->all())
+                        ->update(['project_id' => $project->id]);
+                }
+
+                session()->flash('success', 'Project updated successfully.');
+            } else {
+                $project = Project::create(array_merge($payload, ['created_by' => auth()->id()]));
+
+                if ($selectedTeamIds->isNotEmpty()) {
+                    Team::whereIn('id', $selectedTeamIds->all())
+                        ->update(['project_id' => $project->id]);
+                }
+
+                session()->flash('success', 'Project created successfully.');
             }
-            session()->flash('success', 'Project updated successfully.');
-        } else {
-            $project = Project::create(array_merge($payload, ['created_by' => auth()->id()]));
-            $selectedTeamIds = collect($this->projectTeamIds)
-                ->map(fn ($id) => (int) $id)
-                ->filter()
-                ->unique()
-                ->values();
-
-            if ($selectedTeamIds->isNotEmpty()) {
-                Team::whereIn('id', $selectedTeamIds->all())
-                    ->update(['project_id' => $project->id]);
-            }
-            session()->flash('success', 'Project created successfully.');
-        }
+        });
 
         $this->resetForm();
         $this->showForm = false;
@@ -180,9 +181,11 @@ class ProjectManager extends Component
 
     private function projectTeamOptions()
     {
-        return Team::with(['project', 'lead'])
+        return Team::with(['project:id,name', 'lead:id,name'])
+            ->select('id', 'name', 'project_id', 'lead_id')
             ->when($this->teamSearch, fn ($q) => $q->where('name', 'like', "%{$this->teamSearch}%"))
             ->orderBy('name')
+            ->limit(50)
             ->get();
     }
 
@@ -199,7 +202,8 @@ class ProjectManager extends Component
 
         $clients = User::where('role', 'client')->orderBy('name')->get();
         $projectTeamOptions = $this->projectTeamOptions();
-        $selectedProjectTeams = Team::with(['project', 'lead'])
+        $selectedProjectTeams = Team::with(['project:id,name', 'lead:id,name'])
+            ->select('id', 'name', 'project_id', 'lead_id')
             ->whereIn('id', array_map('intval', $this->projectTeamIds))
             ->orderBy('name')
             ->get();
