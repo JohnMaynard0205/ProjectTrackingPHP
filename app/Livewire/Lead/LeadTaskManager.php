@@ -150,7 +150,7 @@ class LeadTaskManager extends Component
             'project_id' => $team->project_id,
             'team_id' => $team->id,
             'assigned_to' => $assigneeIds->first(),
-            'start_date' => $data['startDate'] ?: null,
+            'start_date' => $this->editingId ? ($data['startDate'] ?: null) : null,
             'due_date' => $data['dueDate'],
             'status' => $data['status'],
             'priority' => $data['priority'],

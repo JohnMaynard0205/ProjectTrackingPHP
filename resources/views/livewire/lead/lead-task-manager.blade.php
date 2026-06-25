@@ -146,34 +146,48 @@
                     @error('assignedTo.*') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                 </div>
 
-                <div class="md:col-span-2 lg:col-span-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {{-- Priority --}}
+                {{-- Priority --}}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                    <select wire:model="priority"
+                            class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+
+                {{-- Status (edit only) --}}
+                @if($editingId)
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                        <select wire:model="priority"
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select wire:model="status"
                                 class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="review">Review</option>
+                            <option value="done">Done</option>
                         </select>
                     </div>
+                @endif
 
-                    {{-- Start Date --}}
+                {{-- Actual start date (edit only) --}}
+                @if($editingId)
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Actual Start Date</label>
                         <input wire:model="startDate" type="date"
                                class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
+                @endif
 
-                    {{-- Due Date --}}
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            Due Date <span class="text-red-500">*</span>
-                        </label>
-                        <input wire:model="dueDate" type="date"
-                               class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 @error('dueDate') border-red-400 @enderror">
-                        @error('dueDate') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
-                    </div>
+                {{-- Due Date --}}
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        Due Date <span class="text-red-500">*</span>
+                    </label>
+                    <input wire:model="dueDate" type="date"
+                           class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 @error('dueDate') border-red-400 @enderror">
+                    @error('dueDate') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                 </div>
             </div>
 
@@ -206,7 +220,6 @@
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Task</th>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Assigned To</th>
-                        <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Start Date</th>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Due Date</th>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Priority</th>
                         <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
@@ -255,11 +268,6 @@
                                         {{ $task->assignees->isNotEmpty() ? $task->assignees->pluck('name')->join(', ') : $task->assignee?->name }}
                                     </span>
                                 </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="text-gray-600">
-                                    {{ $task->start_date ? $task->start_date->format('M d, Y') : '—' }}
-                                </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <span class="{{ $isOverdue ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
@@ -357,13 +365,7 @@
                                                 <div class="flex flex-wrap items-center gap-4 text-xs text-gray-500">
                                                     <span><span class="font-semibold text-gray-700">Project:</span> {{ $task->project?->name ?? 'No project' }}</span>
                                                     <span><span class="font-semibold text-gray-700">Team:</span> {{ $task->team?->name ?? 'No team' }}</span>
-                                                    <span><span class="font-semibold text-gray-700">Start:</span>
-                                                        @if($task->start_date)
-                                                            {{ $task->start_date->format('M d, Y') }}
-                                                        @else
-                                                            Not set
-                                                        @endif
-                                                    </span>
+                                                    <span><span class="font-semibold text-gray-700">Start:</span> {{ $task->start_date?->format('M d, Y') ?? 'Not set' }}</span>
                                                     <span><span class="font-semibold text-gray-700">Due:</span> {{ $task->due_date?->format('M d, Y') ?? 'Not set' }}</span>
                                                 </div>
                                             </div>
